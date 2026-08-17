@@ -2649,7 +2649,7 @@ function dashFetch(sheetName,key){
     if(dashFetching<=0) dashOnAllLoaded();
   };
   const scr=document.createElement('script');
-  scr.src=`https://docs.google.com/spreadsheets/d/${DASH_SID}/gviz/tq?tqx=out:json;responseHandler:${cb}&sheet=${encodeURIComponent(sheetName)}&t=${Date.now()}`;
+  scr.src=`https://docs.google.com/spreadsheets/d/${DASH_SID}/gviz/tq?tqx=out:json;responseHandler:${cb}&sheet=${encodeURIComponent(sheetName)}&headers=1&t=${Date.now()}`;
   scr.onerror=()=>{ delete window[cb]; dashFetching--; if(dashFetching<=0) dashOnAllLoaded(); };
   document.head.appendChild(scr);
 }
