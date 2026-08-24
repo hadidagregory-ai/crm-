@@ -848,11 +848,12 @@ let prospects = [];
 ════════════════════════════════════ */
 const GOOGLE_CLIENT_ID = '317857865810-cmhqcivmfd5ckl3fjf4o756t39d14rfa.apps.googleusercontent.com';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
-const DRIVE_FILENAME = 'crm-trainingjudo-cloud.json';
+const DRIVE_FILENAME = 'crm-trainingjudo.json';
 let _crmSyncTimer = null;
 let driveTokenClient = null;
 let driveAccessToken = null;
-let driveFileId = localStorage.getItem('driveFileId') || null;
+let driveFileId = null; // toujours retrouvé par nom, jamais mis en cache (évite de pointer sur le mauvais fichier après un renommage)
+localStorage.removeItem('driveFileId'); // nettoyage de l'ancien cache (pointait sur un fichier vide créé par erreur)
 
 function crmSetDot(color, title) {
   const el = document.getElementById('crm-sync-dot');
