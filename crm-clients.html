@@ -369,6 +369,14 @@ header{
 </head>
 <body>
 
+<div id="google-gate" style="position:fixed;inset:0;background:#0B1220;color:#fff;display:none;align-items:center;justify-content:center;flex-direction:column;gap:18px;z-index:99999;text-align:center;padding:24px">
+  <div style="font-size:34px">🔒</div>
+  <div style="font-size:19px;font-weight:800">Connexion à Google Drive</div>
+  <div style="font-size:13px;color:#94A3B8;max-width:320px;line-height:1.5">Le CRM sauvegarde automatiquement tes données sur ton Google Drive. Connecte-toi pour continuer.</div>
+  <button onclick="driveGateConnect()" style="padding:14px 30px;background:#7ED957;color:#0B1220;border:none;border-radius:14px;font-weight:800;cursor:pointer;font-size:14px">Se connecter avec Google</button>
+  <div id="google-gate-error" style="color:#FF5757;font-size:12px;min-height:16px"></div>
+</div>
+
 <header>
   <div class="logo">Training<span>Judo</span></div>
   <div style="display:flex;gap:6px;align-items:center">
@@ -845,6 +853,9 @@ let prospects = [];
 
 /* ════════════════════════════════════
    CLOUD SYNC — Google Drive
+   Porte d'entrée obligatoire : on bloque l'accès au CRM tant que
+   la connexion Google n'est pas établie, puis le token est
+   automatiquement rafraîchi en silence pour rester connecté.
 ════════════════════════════════════ */
 const GOOGLE_CLIENT_ID = '317857865810-cmhqcivmfd5ckl3fjf4o756t39d14rfa.apps.googleusercontent.com';
 const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
@@ -852,8 +863,8 @@ const DRIVE_FILENAME = 'crm-trainingjudo.json';
 let _crmSyncTimer = null;
 let driveTokenClient = null;
 let driveAccessToken = null;
-let driveFileId = null; // toujours retrouvé par nom, jamais mis en cache (évite de pointer sur le mauvais fichier après un renommage)
-localStorage.removeItem('driveFileId'); // nettoyage de l'ancien cache (pointait sur un fichier vide créé par erreur)
+let driveFileId = null; // toujours retrouvé par nom, jamais mis en cache
+localStorage.removeItem('driveFileId'); // nettoyage de l'ancien cache
 
 function crmSetDot(color, title) {
   const el = document.getElementById('crm-sync-dot');
@@ -862,6 +873,17 @@ function crmSetDot(color, title) {
 
 function crmGetAllData() {
   return { clients, prospects, compta: CD, orgaTaches, orgaReps, orgaRepDone, progObjectifs };
+}
+
+function driveShowGate(msg) {
+  const g = document.getElementById('google-gate');
+  if (g) g.style.display = 'flex';
+  const err = document.getElementById('google-gate-error');
+  if (err) err.textContent = msg || '';
+}
+function driveHideGate() {
+  const g = document.getElementById('google-gate');
+  if (g) g.style.display = 'none';
 }
 
 function driveRequestToken(interactive) {
@@ -888,46 +910,52 @@ async function driveApiError(res, label) {
   return new Error(label + ': ' + msg);
 }
 
+// Wrapper fetch qui rafraîchit le token en silence et rejoue la requête si le token a expiré (401)
+async function driveFetch(url, options) {
+  options = options || {};
+  options.headers = Object.assign({}, options.headers, { Authorization: 'Bearer ' + driveAccessToken });
+  let res = await fetch(url, options);
+  if (res.status === 401) {
+    await driveRequestToken(false);
+    options.headers.Authorization = 'Bearer ' + driveAccessToken;
+    res = await fetch(url, options);
+  }
+  return res;
+}
+
 async function driveFindOrCreateFile() {
   if (driveFileId) {
-    // Vérifie que le fichier mis en cache existe toujours (et n'est pas "undefined" suite à une ancienne erreur)
-    const check = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=id`, {
-      headers: { Authorization: 'Bearer ' + driveAccessToken }
-    });
+    const check = await driveFetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=id`);
     if (check.ok) return driveFileId;
     driveFileId = null;
-    localStorage.removeItem('driveFileId');
   }
   const q = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`, {
-    headers: { Authorization: 'Bearer ' + driveAccessToken }
-  });
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`);
   if (!res.ok) throw await driveApiError(res, 'Recherche Drive');
   const json = await res.json();
   if (json.files && json.files.length) {
     driveFileId = json.files[0].id;
   } else {
-    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+    const createRes = await driveFetch('https://www.googleapis.com/drive/v3/files', {
       method: 'POST',
-      headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: DRIVE_FILENAME, mimeType: 'application/json' })
     });
     if (!createRes.ok) throw await driveApiError(createRes, 'Création fichier Drive');
     const createJson = await createRes.json();
     driveFileId = createJson.id;
   }
-  localStorage.setItem('driveFileId', driveFileId);
   return driveFileId;
 }
 
 async function _crmPushCloud(data) {
+  if (!driveAccessToken) return; // pas encore connecté (porte pas encore franchie)
   crmSetDot('#E8A020', 'Sync…');
   try {
-    await driveRequestToken(false);
     const fileId = await driveFindOrCreateFile();
-    const upRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    const upRes = await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
       method: 'PATCH',
-      headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
     if (!upRes.ok) throw await driveApiError(upRes, 'Sauvegarde Drive');
@@ -944,31 +972,50 @@ function crmSync() {
   _crmSyncTimer = setTimeout(() => _crmPushCloud(crmGetAllData()), 1500);
 }
 
+// Charge les données depuis Drive dans l'appli (utilisé à la connexion et par le bouton ⬇️ Cloud)
+async function driveLoadIntoApp() {
+  const fileId = await driveFindOrCreateFile();
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+  if (!res.ok) throw await driveApiError(res, 'Lecture Drive');
+  const data = await res.json().catch(() => null);
+  if (data && data.clients && data.clients.length > 0) {
+    clients        = data.clients        || [];
+    prospects      = data.prospects      || [];
+    orgaTaches     = data.orgaTaches     || [];
+    orgaReps       = data.orgaReps       || [];
+    orgaRepDone    = data.orgaRepDone    || {};
+    if (data.compta)        CD             = data.compta;
+    if (data.progObjectifs) progObjectifs  = data.progObjectifs;
+    save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs();
+    render(); renderToday(); renderProspects();
+    crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
+    return true;
+  }
+  crmSetDot('#5BBD35', 'Drive connecté');
+  return false;
+}
+
+// Porte d'entrée : appelée par le bouton "Se connecter avec Google" de l'overlay
+async function driveGateConnect() {
+  driveShowGate('Connexion en cours…');
+  try {
+    await driveRequestToken(true);
+    driveHideGate();
+    crmSetDot('#E8A020', 'Chargement…');
+    await driveLoadIntoApp();
+  } catch(e) {
+    console.warn('CRM Drive gate error:', e);
+    driveShowGate('Connexion refusée ou échouée — réessaie.');
+  }
+}
+
+// Bouton ⬇️ Cloud : reconnecte/recharge manuellement à tout moment
 async function crmCloudLoad() {
   crmSetDot('#E8A020', 'Connexion Google…');
   try {
     await driveRequestToken(true);
-    const fileId = await driveFindOrCreateFile();
-    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { Authorization: 'Bearer ' + driveAccessToken }
-    });
-    if (!res.ok) throw await driveApiError(res, 'Lecture Drive');
-    const data = await res.json().catch(() => null);
-    if (data && data.clients && data.clients.length > 0) {
-      clients        = data.clients        || [];
-      prospects      = data.prospects      || [];
-      orgaTaches     = data.orgaTaches     || [];
-      orgaReps       = data.orgaReps       || [];
-      orgaRepDone    = data.orgaRepDone    || {};
-      if (data.compta)        CD             = data.compta;
-      if (data.progObjectifs) progObjectifs  = data.progObjectifs;
-      save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs();
-      render(); renderToday(); renderProspects();
-      crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
-    } else {
-      crmSetDot('#B0B7C3', 'Drive vide');
-      alert('Connecté à Drive, mais aucune donnée trouvée pour le moment (le fichier vient peut-être d\'être créé — tes prochaines modifs s\'y sauvegarderont).');
-    }
+    const found = await driveLoadIntoApp();
+    if (!found) alert('Connecté à Drive, mais aucune donnée trouvée pour le moment (le fichier vient peut-être d\'être créé — tes prochaines modifs s\'y sauvegarderont).');
   } catch(e) {
     crmSetDot('#FF5757', 'Erreur Drive');
     console.warn('CRM Drive load error:', e);
@@ -4972,38 +5019,18 @@ function patchFiches(){
 ════════════════════════════════════ */
 (async function init() {
   load(); loadCompta(); loadProgObjectifs(); loadOrga();
-  const hadLocalData = clients.length > 0;
-  if (!hadLocalData) { seedOrga(); seedClients(); seedProspects(); }
   patchFiches(); render(); renderToday(); renderProspects();
 
-  // Tentative de reconnexion silencieuse à Google Drive (sans popup).
-  // Marche seulement si une session Google valide existe déjà pour ce client OAuth.
-  crmSetDot('#B0B7C3', 'Cloud non connecté — clique ⬇️ Cloud');
+  // Porte d'entrée : on essaie une reconnexion silencieuse (sans popup, marche si
+  // une session Google valide existe déjà). Si ça échoue, on bloque l'accès au
+  // CRM avec l'overlay tant que l'utilisateur ne clique pas "Se connecter".
+  crmSetDot('#E8A020', 'Connexion Google…');
   setTimeout(async () => {
     try {
       await driveRequestToken(false);
-      const fileId = await driveFindOrCreateFile();
-      crmSetDot('#5BBD35', 'Drive connecté');
-      if (!hadLocalData) {
-        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-          headers: { Authorization: 'Bearer ' + driveAccessToken }
-        });
-        const data = await res.json().catch(() => null);
-        if (data && data.clients && data.clients.length > 0) {
-          clients        = data.clients        || [];
-          prospects      = data.prospects      || [];
-          orgaTaches     = data.orgaTaches     || [];
-          orgaReps       = data.orgaReps       || [];
-          orgaRepDone    = data.orgaRepDone    || {};
-          if (data.compta)        CD             = data.compta;
-          if (data.progObjectifs) progObjectifs  = data.progObjectifs;
-          save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs();
-          render(); renderToday(); renderProspects();
-          crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
-        }
-      }
+      await driveLoadIntoApp();
     } catch(e) {
-      crmSetDot('#B0B7C3', 'Cloud non connecté — clique ⬇️ Cloud');
+      driveShowGate();
     }
   }, 300);
 })();
