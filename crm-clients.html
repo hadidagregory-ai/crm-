@@ -365,14 +365,15 @@ header{
 .call-delete{position:absolute;top:8px;right:8px;background:none;border:none;color:var(--dim);cursor:pointer;font-size:15px}
 .call-delete:hover{color:var(--red)}
 </style>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body>
 
 <header>
   <div class="logo">Training<span>Judo</span></div>
   <div style="display:flex;gap:6px;align-items:center">
-    <button class="btn btn-ghost btn-sm" onclick="crmCloudLoad()" title="Charger les données depuis le cloud" style="font-size:12px">⬇️ Cloud</button>
-    <div id="crm-sync-dot" style="width:8px;height:8px;border-radius:50%;background:#B0B7C3;transition:background .3s;flex-shrink:0" title="Cloud non configuré"></div>
+    <button class="btn btn-ghost btn-sm" onclick="crmCloudLoad()" title="Se connecter à Google Drive et charger les données" style="font-size:12px">⬇️ Cloud</button>
+    <div id="crm-sync-dot" style="width:8px;height:8px;border-radius:50%;background:#B0B7C3;transition:background .3s;flex-shrink:0" title="Cloud non connecté"></div>
     <button class="btn btn-ghost btn-sm" onclick="exportJSON()">↓ Export</button>
     <button class="btn btn-ghost btn-sm" onclick="importTrigger()">↑ Import</button>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -843,11 +844,15 @@ let clients = [];
 let prospects = [];
 
 /* ════════════════════════════════════
-   CLOUD SYNC — Google Sheets
+   CLOUD SYNC — Google Drive
 ════════════════════════════════════ */
-const CRM_API = ''; // ← Coller ici l'URL Apps Script (même URL que coach-panel.html)
-const CRM_SHEET = 'CRM_LIVE';
+const GOOGLE_CLIENT_ID = '317857865810-cmhqcivmfd5ckl3fjf4o756t39d14rfa.apps.googleusercontent.com';
+const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const DRIVE_FILENAME = 'crm-trainingjudo-cloud.json';
 let _crmSyncTimer = null;
+let driveTokenClient = null;
+let driveAccessToken = null;
+let driveFileId = localStorage.getItem('driveFileId') || null;
 
 function crmSetDot(color, title) {
   const el = document.getElementById('crm-sync-dot');
@@ -858,31 +863,78 @@ function crmGetAllData() {
   return { clients, prospects, compta: CD, orgaTaches, orgaReps, orgaRepDone, progObjectifs };
 }
 
+function driveRequestToken(interactive) {
+  return new Promise((resolve, reject) => {
+    if (!window.google || !google.accounts) { reject(new Error('Google Identity Services non chargé')); return; }
+    if (!driveTokenClient) {
+      driveTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: GOOGLE_CLIENT_ID,
+        scope: DRIVE_SCOPE,
+        callback: () => {}
+      });
+    }
+    driveTokenClient.callback = (resp) => {
+      if (resp && resp.access_token) { driveAccessToken = resp.access_token; resolve(driveAccessToken); }
+      else reject(resp);
+    };
+    driveTokenClient.requestAccessToken({ prompt: interactive ? 'consent' : '' });
+  });
+}
+
+async function driveFindOrCreateFile() {
+  if (driveFileId) return driveFileId;
+  const q = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`, {
+    headers: { Authorization: 'Bearer ' + driveAccessToken }
+  });
+  const json = await res.json();
+  if (json.files && json.files.length) {
+    driveFileId = json.files[0].id;
+  } else {
+    const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: DRIVE_FILENAME, mimeType: 'application/json' })
+    });
+    const createJson = await createRes.json();
+    driveFileId = createJson.id;
+  }
+  localStorage.setItem('driveFileId', driveFileId);
+  return driveFileId;
+}
+
 async function _crmPushCloud(data) {
-  if (!CRM_API) return;
   crmSetDot('#E8A020', 'Sync…');
   try {
-    await fetch(CRM_API, { method: 'POST', body: JSON.stringify({ sheet: CRM_SHEET, data }) });
+    await driveRequestToken(false);
+    const fileId = await driveFindOrCreateFile();
+    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
     const t = new Date();
-    crmSetDot('#5BBD35', 'Cloud ✓ ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2,'0'));
+    crmSetDot('#5BBD35', 'Drive ✓ ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2,'0'));
   } catch(e) {
-    crmSetDot('#FF5757', 'Erreur cloud');
-    console.warn('CRM cloud sync error:', e);
+    crmSetDot('#FF5757', 'Reconnexion Google requise');
+    console.warn('CRM Drive sync error:', e);
   }
 }
 
 function crmSync() {
-  if (!CRM_API) return;
   clearTimeout(_crmSyncTimer);
   _crmSyncTimer = setTimeout(() => _crmPushCloud(crmGetAllData()), 1500);
 }
 
 async function crmCloudLoad() {
-  if (!CRM_API) { alert('Configure CRM_API dans crm-clients.html'); return; }
-  crmSetDot('#E8A020', 'Chargement…');
+  crmSetDot('#E8A020', 'Connexion Google…');
   try {
-    const res = await fetch(CRM_API + '?sheet=' + CRM_SHEET + '&t=' + Date.now());
-    const data = await res.json();
+    await driveRequestToken(true);
+    const fileId = await driveFindOrCreateFile();
+    const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+      headers: { Authorization: 'Bearer ' + driveAccessToken }
+    });
+    const data = await res.json().catch(() => null);
     if (data && data.clients && data.clients.length > 0) {
       clients        = data.clients        || [];
       prospects      = data.prospects      || [];
@@ -893,14 +945,14 @@ async function crmCloudLoad() {
       if (data.progObjectifs) progObjectifs  = data.progObjectifs;
       save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs();
       render(); renderToday(); renderProspects();
-      crmSetDot('#5BBD35', 'Cloud ✓ — ' + clients.length + ' clients');
+      crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
     } else {
-      crmSetDot('#B0B7C3', 'Cloud vide');
-      alert('Aucune donnée trouvée dans le cloud');
+      crmSetDot('#B0B7C3', 'Drive vide');
+      alert('Connecté à Drive, mais aucune donnée trouvée pour le moment (le fichier vient peut-être d\'être créé — tes prochaines modifs s\'y sauvegarderont).');
     }
   } catch(e) {
-    crmSetDot('#FF5757', 'Erreur cloud');
-    alert('Impossible de contacter le cloud. Vérifie ta connexion et le CRM_API.');
+    crmSetDot('#FF5757', 'Erreur Drive');
+    alert('Connexion Google Drive impossible ou refusée. Réessaie en cliquant sur ⬇️ Cloud et autorise l\'accès.');
   }
 }
 let currentFilter = 'tous';
@@ -4901,35 +4953,39 @@ function patchFiches(){
 (async function init() {
   load(); loadCompta(); loadProgObjectifs(); loadOrga();
   const hadLocalData = clients.length > 0;
-  if (CRM_API && !hadLocalData) {
-    // Essayer le cloud AVANT de seeder (pour éviter les données d'exemple)
-    crmSetDot('#E8A020', 'Connexion cloud…');
+  if (!hadLocalData) { seedOrga(); seedClients(); seedProspects(); }
+  patchFiches(); render(); renderToday(); renderProspects();
+
+  // Tentative de reconnexion silencieuse à Google Drive (sans popup).
+  // Marche seulement si une session Google valide existe déjà pour ce client OAuth.
+  crmSetDot('#B0B7C3', 'Cloud non connecté — clique ⬇️ Cloud');
+  setTimeout(async () => {
     try {
-      const res = await fetch(CRM_API + '?sheet=' + CRM_SHEET + '&t=' + Date.now());
-      const data = await res.json();
-      if (data && data.clients && data.clients.length > 0) {
-        clients        = data.clients        || [];
-        prospects      = data.prospects      || [];
-        orgaTaches     = data.orgaTaches     || [];
-        orgaReps       = data.orgaReps       || [];
-        orgaRepDone    = data.orgaRepDone    || {};
-        if (data.compta)        CD            = data.compta;
-        if (data.progObjectifs) progObjectifs = data.progObjectifs;
-        save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs();
-        crmSetDot('#5BBD35', 'Cloud ✓ — ' + clients.length + ' clients');
-      } else {
-        crmSetDot('#B0B7C3', 'Cloud vide');
-        seedOrga(); seedClients(); seedProspects();
+      await driveRequestToken(false);
+      const fileId = await driveFindOrCreateFile();
+      crmSetDot('#5BBD35', 'Drive connecté');
+      if (!hadLocalData) {
+        const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          headers: { Authorization: 'Bearer ' + driveAccessToken }
+        });
+        const data = await res.json().catch(() => null);
+        if (data && data.clients && data.clients.length > 0) {
+          clients        = data.clients        || [];
+          prospects      = data.prospects      || [];
+          orgaTaches     = data.orgaTaches     || [];
+          orgaReps       = data.orgaReps       || [];
+          orgaRepDone    = data.orgaRepDone    || {};
+          if (data.compta)        CD             = data.compta;
+          if (data.progObjectifs) progObjectifs  = data.progObjectifs;
+          save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs();
+          render(); renderToday(); renderProspects();
+          crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
+        }
       }
     } catch(e) {
-      crmSetDot('#FF5757', 'Cloud inaccessible');
-      seedOrga(); seedClients(); seedProspects();
+      crmSetDot('#B0B7C3', 'Cloud non connecté — clique ⬇️ Cloud');
     }
-  } else {
-    seedOrga(); seedClients(); seedProspects();
-    if (CRM_API) crmSetDot('#5BBD35', 'Cloud configuré');
-  }
-  patchFiches(); render(); renderToday(); renderProspects();
+  }, 300);
 })();
 </script>
 </body>
