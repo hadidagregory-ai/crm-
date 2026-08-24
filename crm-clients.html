@@ -949,7 +949,7 @@ async function driveFindOrCreateFile() {
 }
 
 async function _crmPushCloud(data) {
-  if (!driveAccessToken) return; // pas encore connecté (porte pas encore franchie)
+  if (!driveAccessToken) { driveShowGate(); return; } // pas connecté : on bloque plutôt que de perdre la modif en silence
   crmSetDot('#E8A020', 'Sync…');
   try {
     const fileId = await driveFindOrCreateFile();
@@ -964,6 +964,9 @@ async function _crmPushCloud(data) {
   } catch(e) {
     crmSetDot('#FF5757', 'Erreur Drive (voir console)');
     console.warn('CRM Drive sync error:', e);
+    // La modif est bien dans le navigateur (localStorage), mais pas encore sur Drive :
+    // on bloque la suite tant que la connexion n'est pas rétablie, pour ne rien perdre.
+    driveShowGate('Connexion perdue — tes dernières modifications ne sont pas encore sauvegardées sur Drive. Reconnecte-toi pour continuer.');
   }
 }
 
@@ -995,14 +998,23 @@ async function driveLoadIntoApp() {
   return false;
 }
 
+let driveConnectedOnce = false; // distingue "première connexion" (on charge Drive) de "reconnexion après coupure" (on pousse le local)
+
 // Porte d'entrée : appelée par le bouton "Se connecter avec Google" de l'overlay
 async function driveGateConnect() {
   driveShowGate('Connexion en cours…');
   try {
     await driveRequestToken(true);
     driveHideGate();
-    crmSetDot('#E8A020', 'Chargement…');
-    await driveLoadIntoApp();
+    if (driveConnectedOnce) {
+      // Reconnexion en cours de session : le navigateur (localStorage) est plus à jour
+      // que Drive, qui n'a pas reçu les dernières modifs. On pousse, on n'écrase pas.
+      await _crmPushCloud(crmGetAllData());
+    } else {
+      crmSetDot('#E8A020', 'Chargement…');
+      await driveLoadIntoApp();
+      driveConnectedOnce = true;
+    }
   } catch(e) {
     console.warn('CRM Drive gate error:', e);
     driveShowGate('Connexion refusée ou échouée — réessaie.');
@@ -5029,6 +5041,7 @@ function patchFiches(){
     try {
       await driveRequestToken(false);
       await driveLoadIntoApp();
+      driveConnectedOnce = true;
     } catch(e) {
       driveShowGate();
     }
