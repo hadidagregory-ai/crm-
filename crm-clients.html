@@ -881,12 +881,27 @@ function driveRequestToken(interactive) {
   });
 }
 
+async function driveApiError(res, label) {
+  let msg = res.status + ' ' + res.statusText;
+  try { const j = await res.json(); if (j.error && j.error.message) msg = j.error.message; } catch(e) {}
+  return new Error(label + ': ' + msg);
+}
+
 async function driveFindOrCreateFile() {
-  if (driveFileId) return driveFileId;
+  if (driveFileId) {
+    // Vérifie que le fichier mis en cache existe toujours (et n'est pas "undefined" suite à une ancienne erreur)
+    const check = await fetch(`https://www.googleapis.com/drive/v3/files/${driveFileId}?fields=id`, {
+      headers: { Authorization: 'Bearer ' + driveAccessToken }
+    });
+    if (check.ok) return driveFileId;
+    driveFileId = null;
+    localStorage.removeItem('driveFileId');
+  }
   const q = encodeURIComponent(`name='${DRIVE_FILENAME}' and trashed=false`);
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`, {
     headers: { Authorization: 'Bearer ' + driveAccessToken }
   });
+  if (!res.ok) throw await driveApiError(res, 'Recherche Drive');
   const json = await res.json();
   if (json.files && json.files.length) {
     driveFileId = json.files[0].id;
@@ -896,6 +911,7 @@ async function driveFindOrCreateFile() {
       headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: DRIVE_FILENAME, mimeType: 'application/json' })
     });
+    if (!createRes.ok) throw await driveApiError(createRes, 'Création fichier Drive');
     const createJson = await createRes.json();
     driveFileId = createJson.id;
   }
@@ -908,15 +924,16 @@ async function _crmPushCloud(data) {
   try {
     await driveRequestToken(false);
     const fileId = await driveFindOrCreateFile();
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+    const upRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
       method: 'PATCH',
       headers: { Authorization: 'Bearer ' + driveAccessToken, 'Content-Type': 'application/json' },
       body: JSON.stringify(data)
     });
+    if (!upRes.ok) throw await driveApiError(upRes, 'Sauvegarde Drive');
     const t = new Date();
     crmSetDot('#5BBD35', 'Drive ✓ ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2,'0'));
   } catch(e) {
-    crmSetDot('#FF5757', 'Reconnexion Google requise');
+    crmSetDot('#FF5757', 'Erreur Drive (voir console)');
     console.warn('CRM Drive sync error:', e);
   }
 }
@@ -934,6 +951,7 @@ async function crmCloudLoad() {
     const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
       headers: { Authorization: 'Bearer ' + driveAccessToken }
     });
+    if (!res.ok) throw await driveApiError(res, 'Lecture Drive');
     const data = await res.json().catch(() => null);
     if (data && data.clients && data.clients.length > 0) {
       clients        = data.clients        || [];
@@ -952,7 +970,8 @@ async function crmCloudLoad() {
     }
   } catch(e) {
     crmSetDot('#FF5757', 'Erreur Drive');
-    alert('Connexion Google Drive impossible ou refusée. Réessaie en cliquant sur ⬇️ Cloud et autorise l\'accès.');
+    console.warn('CRM Drive load error:', e);
+    alert('Connexion Google Drive impossible : ' + (e && e.message ? e.message : e) + '\n\nSi le message parle d\'API désactivée, il faut activer "Google Drive API" dans Google Cloud Console (APIs & Services → Library).');
   }
 }
 let currentFilter = 'tous';
