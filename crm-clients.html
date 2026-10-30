@@ -979,6 +979,44 @@ function crmSync() {
   _crmSyncTimer = setTimeout(() => _crmPushCloud(crmGetAllData()), 1500);
 }
 
+/* ════════════════════════════════════════════════════════════════
+   SYNC CLIENTS → TRAINING JUDO PRO
+   Pousse les clients du CRM vers le même stockage partagé (Apps Script)
+   que lit TrainingJudo PRO, en fusionnant par email pour ne pas
+   écraser les clients/programmes déjà présents côté app training.
+════════════════════════════════════════════════════════════════ */
+const TJ_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwmyt_zCVMltnkJgY8JHDUSVierfnYsFRzVVL0FabPZjZdmsg3TzhSrGb3O7Lah5VVQEg/exec';
+let _tjSyncTimer = null;
+function syncClientsToTrainingApp() {
+  clearTimeout(_tjSyncTimer);
+  _tjSyncTimer = setTimeout(_pushClientsToTrainingApp, 1500);
+}
+async function _pushClientsToTrainingApp() {
+  try {
+    const r = await fetch(TJ_APPS_SCRIPT_URL);
+    if (!r.ok) return;
+    const d = await r.json();
+    const tjClients = Array.isArray(d.clients) ? d.clients.slice() : [];
+    clients.forEach(c => {
+      const nom = ((c.prenom||'') + ' ' + (c.nom||'')).trim();
+      const email = (c.email||'').trim().toLowerCase();
+      let match = email ? tjClients.find(t => (t.email||'').trim().toLowerCase() === email) : null;
+      if (!match) match = tjClients.find(t => t.fromCrmId === c.id);
+      if (match) {
+        match.nom = nom || match.nom;
+        if (c.email) match.email = c.email;
+        if (c.sport) match.sport = c.sport;
+        if (c.objectif) match.objectifs = c.objectif;
+        match.fromCrmId = c.id;
+      } else {
+        tjClients.push({ id: 'crm_'+c.id, nom, email: c.email||'', sport: c.sport||'', niveau: '', poids: '', taille: '', objectifs: c.objectif||'', notes: '', fromCrmId: c.id });
+      }
+    });
+    d.clients = tjClients;
+    fetch(TJ_APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ data: d }) }).catch(() => {});
+  } catch (e) { console.warn('Sync clients TrainingJudo error:', e); }
+}
+
 // Charge les données depuis Drive dans l'appli (utilisé à la connexion et par le bouton ⬇️ Cloud)
 async function driveLoadIntoApp() {
   const fileId = await driveFindOrCreateFile();
@@ -1052,7 +1090,7 @@ function load(){
   try{ prospects = JSON.parse(localStorage.getItem(PKEY)) || []; }
   catch(e){ prospects = []; }
 }
-function save(){ localStorage.setItem(KEY, JSON.stringify(clients)); crmSync(); }
+function save(){ localStorage.setItem(KEY, JSON.stringify(clients)); crmSync(); syncClientsToTrainingApp(); }
 function saveP(){ localStorage.setItem(PKEY, JSON.stringify(prospects)); crmSync(); }
 function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
 function initials(p,n){ return ((p||'?')[0]+(n||'?')[0]).toUpperCase(); }
