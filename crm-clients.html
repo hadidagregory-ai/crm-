@@ -1131,12 +1131,12 @@ async function driveLoadIntoApp() {
     if (data.compta)        CD             = data.compta;
     if (data.progObjectifs) progObjectifs  = data.progObjectifs;
     save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs(); saveInsta();
-    ensureIgWeeklyPlan();
+    igPurgeSeeds();
     render(); renderToday(); renderProspects();
     crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
     return true;
   }
-  ensureIgWeeklyPlan();
+  igPurgeSeeds();
   crmSetDot('#5BBD35', 'Drive connecté');
   return false;
 }
@@ -5182,7 +5182,6 @@ let igIdees = [];
 let igStats = [];
 let igView = 'idees';
 let igFilterStage = 'tous';
-let igFilterType = 'tous';
 let igCurrentType = 'post', igCurrentStage = 'attirer', igCurrentStatut = 'idee';
 
 const IG_TYPE_META = {
@@ -5207,16 +5206,24 @@ function igEsc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&
 function loadInsta(){
   try{ igIdees = JSON.parse(localStorage.getItem('igIdees')) || []; } catch(e){ igIdees = []; }
   try{ igStats = JSON.parse(localStorage.getItem('igStats')) || []; } catch(e){ igStats = []; }
+  igPurgeSeeds();
 }
 function saveInsta(){
   localStorage.setItem('igIdees', JSON.stringify(igIdees));
   localStorage.setItem('igStats', JSON.stringify(igStats));
   crmSync();
 }
+// Nettoie les anciennes cartes auto-générées (ancien système, abandonné) qui auraient pu
+// persister dans igIdees — l'onglet Idées ne doit contenir que ce que l'utilisateur écrit.
+function igPurgeSeeds(){
+  const before = igIdees.length;
+  igIdees = igIdees.filter(it => (it.id||'').indexOf('seed_') !== 0);
+  if (igIdees.length !== before) saveInsta();
+}
 
-const IG_CANVA_LINK = 'https://canva.link/xoz48ua4wczhr9y';
-// Modèle hebdo répété chaque semaine : [jour (0=lundi..6=dimanche), type, stage, titre]
-const IG_WEEK_TEMPLATE = [
+// Modèle hebdo affiché dans le Calendrier (recalculé en direct, jamais stocké dans igIdees) :
+// [jour (0=lundi..6=dimanche), type, stage, titre]
+const IG_POST_TEMPLATE = [
   [0,'reel','attirer','Réaction (vidéo)'],
   [0,'reel','convaincre','Démo de l’application'],
   [1,'reel','attirer','Conseil face caméra'],
@@ -5228,48 +5235,36 @@ const IG_WEEK_TEMPLATE = [
   [4,'reel','vendre','Vente — mon accompagnement'],
   [5,'reel','attirer','Conseil'],
   [5,'reel','convaincre','Extrait d’appel client'],
-  [6,'story','suivre','Carrousel récap (story)'],
 ];
-function igMondayOf(d){
-  const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  const offset = (dt.getDay() + 6) % 7; // 0 = lundi
-  dt.setDate(dt.getDate() - offset);
-  return dt;
-}
+// Story du jour : [jour, titre, note]
+const IG_STORY_TEMPLATE = [
+  [0,'Preuve / exemple (résultat client)',''],
+  [1,'FAQ',''],
+  [2,'Croyance + appel','Contenu à envoyer'],
+  [3,'Promo YouTube (déjà créé)',''],
+  [4,'Clash + rappel du jour',''],
+  [5,'Preuve / exemple',''],
+  [6,'Connexion',''],
+];
 function igDateStr(d){
   return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
 }
-// Génère automatiquement le plan de contenu (semaine en cours + semaine suivante) à partir du modèle hebdo.
-// Idempotent : chaque semaine n'est générée qu'une fois (suivi via ig_weekly_seeded_mondays).
-function ensureIgWeeklyPlan(){
-  // Vérifie directement les données (pas un drapeau à part) : si Drive a écrasé igIdees
-  // entre deux appels, les cartes de la semaine manquent et sont régénérées ici même.
-  const thisMonday = igMondayOf(new Date());
-  let changed = false;
-  for (let w = 0; w < 2; w++){
-    const monday = new Date(thisMonday);
-    monday.setDate(monday.getDate() + w*7);
-    const mondayStr = igDateStr(monday);
-    const prefix = 'seed_' + mondayStr + '_';
-    const alreadyThere = igIdees.some(it => (it.id||'').indexOf(prefix) === 0)
-      || (mondayStr === '2026-11-02' && igIdees.some(it => (it.id||'').indexOf('seed_wk1_') === 0));
-    if (alreadyThere) continue;
-    IG_WEEK_TEMPLATE.forEach((it, i) => {
-      const d = new Date(monday);
-      d.setDate(d.getDate() + it[0]);
-      igIdees.push({
-        id: prefix + i,
-        titre: it[3],
-        date: igDateStr(d),
-        type: it[1],
-        stage: it[2],
-        statut: 'idee',
-        note: 'Template Canva : ' + IG_CANVA_LINK,
-      });
+// Calcule les cartes du modèle hebdo pour une fenêtre de jours à partir de startDate (jamais persisté).
+function igTemplateItemsForRange(startDate, days){
+  const items = [];
+  for (let i = 0; i < days; i++){
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    const dow = (d.getDay() + 6) % 7; // 0 = lundi
+    const dateStr = igDateStr(d);
+    IG_POST_TEMPLATE.filter(t=>t[0]===dow).forEach((t, idx) => {
+      items.push({ id:'tmpl_post_'+dateStr+'_'+idx, titre:t[3], date:dateStr, type:t[1], stage:t[2], statut:'idee', template:true });
     });
-    changed = true;
+    IG_STORY_TEMPLATE.filter(t=>t[0]===dow).forEach((t, idx) => {
+      items.push({ id:'tmpl_story_'+dateStr+'_'+idx, titre:t[1], date:dateStr, type:'story', stage:'suivre', statut:'idee', note:t[2]||'', template:true });
+    });
   }
-  if (changed) saveInsta();
+  return items;
 }
 
 function renderInsta(){ igGoView(igView || 'idees'); }
@@ -5293,35 +5288,21 @@ function igRenderContent(){
   else if(igView==='stats') igRenderStats();
 }
 
-function igChip(label, active, onclick){
-  return `<button onclick="${onclick}" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid ${active?'#C13584':'var(--border)'};background:${active?'#C13584':'var(--card2)'};color:${active?'#fff':'inherit'};font-size:12px;cursor:pointer">${label}</button>`;
-}
-function igFilterChipsHtml(){
-  const stages=[['tous','Tous'],['attirer','🧲 Attirer'],['convaincre','🤝 Convaincre'],['vendre','💰 Vendre'],['suivre','🔁 Suivre']];
-  let html = stages.map(([k,label])=>igChip(label, igFilterStage===k, `igSetFilterStage('${k}')`)).join('');
-  if(igView==='idees'){
-    const types=[['tous','Tous types'],['post','🖼️ Post'],['reel','🎬 Reel']];
-    html += '<span style="width:1px;background:var(--border);flex-shrink:0;margin:0 2px"></span>' + types.map(([k,label])=>igChip(label, igFilterType===k, `igSetFilterType('${k}')`)).join('');
-  }
-  return html;
+// Petit menu déroulant pour trier par objectif (remplace l'ancienne barre de filtres).
+function igFilterSelectHtml(){
+  const opts=[['tous','Tous'],['attirer','🧲 Attirer'],['convaincre','🤝 Convaincre'],['vendre','💰 Vendre'],['suivre','🔁 Suivre']];
+  return `<select onchange="igSetFilterStage(this.value)" style="font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:inherit">
+    ${opts.map(([k,label])=>`<option value="${k}" ${igFilterStage===k?'selected':''}>${label}</option>`).join('')}
+  </select>`;
 }
 function igSetFilterStage(s){ igFilterStage=s; igRenderContent(); }
-function igSetFilterType(t){ igFilterType=t; igRenderContent(); }
 
 function igEmptyHtml(icon, label){ return `<div style="text-align:center;padding:60px 0;color:var(--dim)">${label}<br><span style="font-size:24px">${icon}</span></div>`; }
 
-function igExtractUrl(s){
-  const m = (s||'').match(/https?:\/\/[^\s<]+/);
-  return m ? m[0] : null;
-}
-function igLinkify(s){
-  return igEsc(s).replace(/(https?:\/\/[^\s<]+)/g, url => `<a href="${url}" target="_blank" rel="noopener" style="color:#3578C4;text-decoration:underline">${url}</a>`);
-}
 function igCardHtml(it){
   const tm = IG_TYPE_META[it.type] || IG_TYPE_META.post;
   const sm = IG_STAGE_META[it.stage] || IG_STAGE_META.attirer;
   const um = IG_STATUT_META[it.statut] || IG_STATUT_META.idee;
-  const canvaUrl = /canva\.(com|link)/i.test(it.note||'') ? igExtractUrl(it.note) : null;
   return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
     <div style="display:flex;align-items:flex-start;gap:8px">
       <div style="flex:1;min-width:0">
@@ -5335,36 +5316,37 @@ function igCardHtml(it){
           <span style="font-size:11px;font-weight:700;color:${um.color}">${um.icon} ${um.label}</span>
           ${it.date?`<span style="font-size:11px;color:var(--dim)">· 📅 ${fmtDateShort(it.date)}</span>`:''}
         </div>
-        ${canvaUrl?`<div style="margin-top:6px"><a href="${canvaUrl}" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#00C4CC;background:rgba(0,196,204,0.14);padding:4px 10px;border-radius:8px;text-decoration:none">🎨 Voir le visuel Canva</a></div>`
-          :(it.note?`<div style="font-size:12px;color:var(--dim);margin-top:6px">${igLinkify(it.note)}</div>`:'')}
+        ${it.note?`<div style="font-size:12px;color:var(--dim);margin-top:6px">${igEsc(it.note)}</div>`:''}
       </div>
-      <button onclick="igOpenModal('${it.id}')" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 2px;line-height:1">✎</button>
+      ${it.template?'':`<button onclick="igOpenModal('${it.id}')" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 2px;line-height:1">✎</button>`}
     </div>
   </div>`;
 }
 
 function igRenderIdees(){
-  document.getElementById('ig-filters').innerHTML = igFilterChipsHtml();
+  document.getElementById('ig-filters').innerHTML = igFilterSelectHtml();
   const items = igIdees.filter(x=>x.type!=='story')
-    .filter(x=>igFilterType==='tous'||x.type===igFilterType)
     .filter(x=>igFilterStage==='tous'||x.stage===igFilterStage)
     .sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||(b.createdAt||0)-(a.createdAt||0));
-  document.getElementById('ig-content').innerHTML = items.length ? items.map(igCardHtml).join('') : igEmptyHtml('💡','Aucune idée pour l’instant');
+  document.getElementById('ig-content').innerHTML = items.length ? items.map(igCardHtml).join('') : igEmptyHtml('💡','Écris ici tes idées et classe-les (Attirer / Convaincre / Vendre)');
 }
 function igRenderStories(){
-  document.getElementById('ig-filters').innerHTML = igFilterChipsHtml();
+  document.getElementById('ig-filters').innerHTML = igFilterSelectHtml();
   const items = igIdees.filter(x=>x.type==='story')
     .filter(x=>igFilterStage==='tous'||x.stage===igFilterStage)
     .sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||(b.createdAt||0)-(a.createdAt||0));
   document.getElementById('ig-content').innerHTML = items.length ? items.map(igCardHtml).join('') : igEmptyHtml('⭐','Aucune story pour l’instant');
 }
 function igRenderCal(){
-  const items = igIdees.filter(x=>x.date).sort((a,b)=>a.date.localeCompare(b.date));
+  const start = new Date(); start.setHours(0,0,0,0);
+  const templateItems = igTemplateItemsForRange(start, 14);
+  const manualItems = igIdees.filter(x=>x.date);
+  const items = templateItems.concat(manualItems).sort((a,b)=>a.date.localeCompare(b.date));
   if(!items.length){ document.getElementById('ig-content').innerHTML = igEmptyHtml('🗓️','Aucun contenu planifié'); return; }
   const byDate = {};
   items.forEach(it=>{ (byDate[it.date] = byDate[it.date] || []).push(it); });
   let h='';
-  Object.keys(byDate).forEach(d=>{
+  Object.keys(byDate).sort().forEach(d=>{
     h += `<div style="margin-bottom:14px">
       <div style="font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.5px;margin-bottom:6px">${fmtDate(d).toUpperCase()}</div>
       ${byDate[d].map(igCardHtml).join('')}
@@ -5505,10 +5487,8 @@ function igDeleteStat(id){
       await driveRequestToken(false);
       await driveLoadIntoApp();
       driveConnectedOnce = true;
-      ensureIgWeeklyPlan();
     } catch(e) {
       driveShowGate();
-      ensureIgWeeklyPlan();
     }
   }, 300);
 })();
