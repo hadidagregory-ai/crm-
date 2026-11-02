@@ -559,8 +559,7 @@ header{
 
 <!-- MODAL IDÉE / REEL / STORY -->
 <div class="overlay" id="ig-overlay" onclick="if(event.target===this)igCloseModal()">
-  <div class="modal" style="max-height:92vh;overflow-y:auto;position:relative">
-    <a id="igm-canva-link" href="https://canva.link/xoz48ua4wczhr9y" target="_blank" rel="noopener" title="Voir mes templates Canva" style="display:none;position:absolute;top:14px;left:16px;font-size:18px;text-decoration:none;z-index:1">🎨</a>
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
     <div class="modal-handle"></div>
     <div id="ig-modal-title" style="font-size:17px;font-weight:800;margin-bottom:16px">Nouvelle idée</div>
 
@@ -5326,7 +5325,8 @@ function igRenderIdees(){
   document.getElementById('ig-content').innerHTML = items.length ? items.map(igCardHtml).join('') : igEmptyHtml('💡','Écris ici tes idées et classe-les (Attirer / Convaincre / Vendre)');
 }
 function igRenderStories(){
-  document.getElementById('ig-filters').innerHTML = igFilterSelectHtml();
+  document.getElementById('ig-filters').innerHTML =
+    `<a href="https://canva.link/xoz48ua4wczhr9y" target="_blank" rel="noopener" title="Voir mes templates Canva" style="font-size:16px;text-decoration:none;flex-shrink:0;margin-right:2px">🎨</a>` + igFilterSelectHtml();
   const items = igIdees.filter(x=>x.type==='story')
     .filter(x=>igFilterStage==='tous'||x.stage===igFilterStage)
     .sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||(b.createdAt||0)-(a.createdAt||0));
@@ -5397,7 +5397,6 @@ function igSetType(t){
     const btn = document.getElementById('igm-type-'+k);
     if(btn){ btn.style.background = k===t?'#C13584':'var(--card2)'; btn.style.color = k===t?'#fff':'inherit'; btn.style.borderColor = k===t?'#C13584':'var(--border)'; }
   });
-  document.getElementById('igm-canva-link').style.display = (t==='story') ? '' : 'none';
 }
 function igSetStage(s){
   igCurrentStage = s;
