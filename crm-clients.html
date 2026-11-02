@@ -1131,10 +1131,12 @@ async function driveLoadIntoApp() {
     if (data.compta)        CD             = data.compta;
     if (data.progObjectifs) progObjectifs  = data.progObjectifs;
     save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs(); saveInsta();
+    ensureIgWeeklyPlan();
     render(); renderToday(); renderProspects();
     crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
     return true;
   }
+  ensureIgWeeklyPlan();
   crmSetDot('#5BBD35', 'Drive connecté');
   return false;
 }
