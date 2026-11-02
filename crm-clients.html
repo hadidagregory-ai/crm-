@@ -559,9 +559,9 @@ header{
 
 <!-- MODAL IDÉE / REEL / STORY -->
 <div class="overlay" id="ig-overlay" onclick="if(event.target===this)igCloseModal()">
-  <div class="modal" style="max-height:92vh;overflow-y:auto">
+  <div class="modal" style="max-height:92vh;overflow-y:auto;position:relative">
+    <a id="igm-canva-link" href="https://canva.link/xoz48ua4wczhr9y" target="_blank" rel="noopener" title="Voir mes templates Canva" style="display:none;position:absolute;top:14px;left:16px;font-size:18px;text-decoration:none;z-index:1">🎨</a>
     <div class="modal-handle"></div>
-    <a href="https://canva.link/xoz48ua4wczhr9y" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#00C4CC;background:rgba(0,196,204,0.14);padding:5px 10px;border-radius:8px;text-decoration:none;margin-bottom:10px">🎨 Voir mes templates Canva</a>
     <div id="ig-modal-title" style="font-size:17px;font-weight:800;margin-bottom:16px">Nouvelle idée</div>
 
     <label style="font-size:12px;font-weight:700;color:var(--dim)">Type</label>
@@ -5397,6 +5397,7 @@ function igSetType(t){
     const btn = document.getElementById('igm-type-'+k);
     if(btn){ btn.style.background = k===t?'#C13584':'var(--card2)'; btn.style.color = k===t?'#fff':'inherit'; btn.style.borderColor = k===t?'#C13584':'var(--border)'; }
   });
+  document.getElementById('igm-canva-link').style.display = (t==='story') ? '' : 'none';
 }
 function igSetStage(s){
   igCurrentStage = s;
