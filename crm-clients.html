@@ -5196,6 +5196,7 @@ function loadInsta(){
   try{ igIdees = JSON.parse(localStorage.getItem('igIdees')) || []; } catch(e){ igIdees = []; }
   try{ igStats = JSON.parse(localStorage.getItem('igStats')) || []; } catch(e){ igStats = []; }
   igPurgeSeeds();
+  igLoadConnect();
 }
 function saveInsta(){
   localStorage.setItem('igIdees', JSON.stringify(igIdees));
@@ -5349,10 +5350,161 @@ function igRenderCal(){
   });
   document.getElementById('ig-content').innerHTML = h;
 }
+/* ───── Connexion Instagram (API Meta officielle) ─────
+   Le jeton reste uniquement en local (jamais poussé sur Drive) : il n'est pas
+   mélangé à crmGetAllData/saveInsta. L'échange de code et le rafraîchissement
+   passent par /api/ig-auth-callback et /api/ig-refresh-token (clé secrète
+   côté serveur uniquement). */
+let igConnect = null;
+let igLiveStats = null;
+let igLiveLoading = false;
+let igLiveError = null;
+
+function igLoadConnect(){
+  try{ igConnect = JSON.parse(localStorage.getItem('igConnect')) || null; } catch(e){ igConnect = null; }
+  try{ igLiveStats = JSON.parse(localStorage.getItem('igLiveStats')) || null; } catch(e){ igLiveStats = null; }
+}
+function igSaveConnect(){
+  if (igConnect) localStorage.setItem('igConnect', JSON.stringify(igConnect));
+  else localStorage.removeItem('igConnect');
+}
+function igSaveLiveStats(){
+  if (igLiveStats) localStorage.setItem('igLiveStats', JSON.stringify(igLiveStats));
+  else localStorage.removeItem('igLiveStats');
+}
+function igHandleAuthRedirect(){
+  const m = window.location.hash.match(/ig_connect=([^&]+)/);
+  if (m) {
+    try { igConnect = JSON.parse(decodeURIComponent(m[1])); igSaveConnect(); } catch(e){}
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('ig_error')) {
+    igLiveError = 'Connexion Instagram échouée (' + params.get('ig_error') + ')';
+    params.delete('ig_error');
+    const qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs?('?'+qs):''));
+  }
+}
+function igoConnect(){
+  const redirectUri = encodeURIComponent('https://crm-woad-iota-63.vercel.app/api/ig-auth-callback');
+  const scope = encodeURIComponent('instagram_basic,instagram_manage_insights,pages_show_list,pages_read_engagement,business_management');
+  window.location.href = `https://www.facebook.com/v21.0/dialog/oauth?client_id=1836590414159061&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+}
+function igoDisconnect(){
+  igConnect = null; igLiveStats = null;
+  igSaveConnect(); igSaveLiveStats();
+  igRenderContent();
+}
+async function igEnsureFreshToken(){
+  if (!igConnect) return null;
+  const daysLeft = (igConnect.expiresAt - Date.now()) / 86400000;
+  if (daysLeft > 5) return igConnect.token;
+  try {
+    const r = await fetch('/api/ig-refresh-token?token=' + encodeURIComponent(igConnect.token));
+    const d = await r.json();
+    if (d.token) {
+      igConnect.token = d.token;
+      igConnect.expiresAt = Date.now() + (d.expiresIn||5184000)*1000;
+      igSaveConnect();
+    }
+  } catch(e){}
+  return igConnect.token;
+}
+async function igFetchLiveStats(force){
+  if (!igConnect || igLiveLoading) return;
+  if (!force && igLiveStats && (Date.now() - igLiveStats.fetchedAt) < 15*60*1000) return;
+  igLiveLoading = true; igLiveError = null;
+  igRenderContent();
+  try {
+    const token = await igEnsureFreshToken();
+    const acc = igConnect.igAccountId;
+    const accRes = await fetch(`https://graph.facebook.com/v21.0/${acc}?fields=followers_count,media_count&access_token=${token}`);
+    const accData = await accRes.json();
+    if (accData.error) throw new Error(accData.error.message);
+
+    const mediaRes = await fetch(`https://graph.facebook.com/v21.0/${acc}/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count&limit=25&access_token=${token}`);
+    const mediaData = await mediaRes.json();
+    if (mediaData.error) throw new Error(mediaData.error.message);
+
+    const enriched = [];
+    for (const m of (mediaData.data||[])) {
+      let insights = {};
+      try {
+        const isVideo = m.media_product_type === 'REELS' || m.media_type === 'VIDEO';
+        const metrics = isVideo
+          ? 'reach,likes,comments,shares,saved,total_interactions,ig_reels_avg_watch_time,ig_reels_video_view_total_time'
+          : 'reach,saved,likes,comments,shares,total_interactions';
+        const insRes = await fetch(`https://graph.facebook.com/v21.0/${m.id}/insights?metric=${metrics}&access_token=${token}`);
+        const insData = await insRes.json();
+        if (Array.isArray(insData.data)) insData.data.forEach(row => { insights[row.name] = (row.values && row.values[0] && row.values[0].value) || 0; });
+      } catch(e){}
+      enriched.push({
+        id: m.id, caption: m.caption||'', permalink: m.permalink,
+        thumb: m.thumbnail_url || m.media_url, timestamp: m.timestamp,
+        likes: m.like_count||0, comments: m.comments_count||0,
+        reach: insights.reach||0, saved: insights.saved||0,
+        interactions: insights.total_interactions || ((m.like_count||0)+(m.comments_count||0)),
+        avgWatch: insights.ig_reels_avg_watch_time!=null ? insights.ig_reels_avg_watch_time : null,
+      });
+    }
+    igLiveStats = { followers: accData.followers_count, mediaCount: accData.media_count, media: enriched, fetchedAt: Date.now() };
+    igSaveLiveStats();
+  } catch(e) {
+    igLiveError = 'Erreur Instagram : ' + (e && e.message ? e.message : e);
+  }
+  igLiveLoading = false;
+  igRenderContent();
+}
+function igMediaRowHtml(m){
+  const retention = m.avgWatch!=null ? Math.round(m.avgWatch) + 's moy.' : null;
+  return `<a href="${m.permalink}" target="_blank" rel="noopener" style="display:flex;gap:8px;align-items:center;text-decoration:none;color:inherit;padding:6px 0;border-top:1px solid var(--border)">
+    ${m.thumb?`<img src="${m.thumb}" style="width:40px;height:40px;border-radius:8px;object-fit:cover;flex-shrink:0">`:''}
+    <div style="flex:1;min-width:0">
+      <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${igEsc((m.caption||'(sans légende)').slice(0,60))}</div>
+      <div style="font-size:11px;color:var(--dim)">👁️ ${m.reach} · ❤️ ${m.likes} · 💬 ${m.comments}${retention?` · ⏱️ ${retention}`:''}</div>
+    </div>
+  </a>`;
+}
+function igConnectPanelHtml(){
+  if (!igConnect) {
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;text-align:center">
+      <div style="font-size:13px;color:var(--dim);margin-bottom:10px">Connecte ton compte Instagram pro pour voir tes vraies stats (vues, abonnés, rétention…)</div>
+      <button onclick="igoConnect()" style="background:linear-gradient(45deg,#C13584,#E1306C,#F77737);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer">🔗 Connecter Instagram</button>
+      ${igLiveError?`<div style="color:var(--red);font-size:12px;margin-top:10px">${igEsc(igLiveError)}</div>`:''}
+    </div>`;
+  }
+  let h = `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <div style="font-size:13px;font-weight:700">🔗 ${igEsc(igConnect.pageName||'Instagram connecté')}</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="igFetchLiveStats(true)" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">↻</button>
+        <button onclick="igoDisconnect()" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">Déconnecter</button>
+      </div>
+    </div>`;
+  if (igLiveLoading) return h + `<div style="font-size:12px;color:var(--dim)">Chargement…</div></div>`;
+  if (igLiveError) return h + `<div style="font-size:12px;color:var(--red)">${igEsc(igLiveError)}</div></div>`;
+  if (!igLiveStats) return h + `</div>`;
+
+  h += `<div style="font-size:20px;font-weight:800;margin-bottom:2px">${igLiveStats.followers!=null?igLiveStats.followers:'—'}</div>
+  <div style="font-size:11px;color:var(--dim);margin-bottom:12px">abonnés · ${igLiveStats.mediaCount||0} publications</div>`;
+
+  const media = igLiveStats.media||[];
+  const byReach = [...media].sort((a,b)=>b.reach-a.reach).slice(0,5);
+  const byInteractions = [...media].sort((a,b)=>b.interactions-a.interactions).slice(0,5);
+  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:10px 0 2px">🔥 Les plus vues</div>` + (byReach.length?byReach.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
+  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:14px 0 2px">💬 Les plus engageantes</div>` + (byInteractions.length?byInteractions.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
+  h += `<div style="font-size:10px;color:var(--dim);margin-top:10px">Mis à jour ${fmtDate(new Date(igLiveStats.fetchedAt).toISOString().slice(0,10))}</div>`;
+  h += `</div>`;
+  return h;
+}
+
 function igRenderStats(){
+  igFetchLiveStats(false);
+  let h = igConnectPanelHtml();
   const sorted=[...igStats].sort((a,b)=>b.date.localeCompare(a.date));
-  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
-    <div style="font-size:14px;font-weight:800">Évolution</div>
+  h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:14px;font-weight:800">Relevé manuel</div>
     <button onclick="igOpenStatModal()" style="background:#C13584;color:#fff;border:none;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer">+ Relevé</button>
   </div>`;
   if(!sorted.length){ document.getElementById('ig-content').innerHTML = h + igEmptyHtml('📈','Aucun relevé pour l’instant'); return; }
@@ -5465,6 +5617,7 @@ function igDeleteStat(id){
 ════════════════════════════════════ */
 (async function init() {
   load(); loadCompta(); loadProgObjectifs(); loadOrga(); loadInsta();
+  igHandleAuthRedirect();
   patchFiches(); render(); renderToday(); renderProspects();
 
   // Porte d'entrée : on essaie une reconnexion silencieuse (sans popup, marche si
