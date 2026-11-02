@@ -5391,6 +5391,24 @@ function igoConnect(){
   const scope = encodeURIComponent('instagram_basic,instagram_manage_insights,pages_show_list,pages_read_engagement,business_management');
   window.location.href = `https://www.facebook.com/v21.0/dialog/oauth?client_id=1836590414159061&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
 }
+async function igoConnectWithToken(){
+  const input = document.getElementById('ig-manual-token');
+  const token = input ? input.value.trim() : '';
+  if (!token) { alert('Colle ton token Graph API Explorer'); return; }
+  igLiveLoading = true; igLiveError = null; igRenderContent();
+  try {
+    const r = await fetch('/api/ig-connect-token', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token }) });
+    const d = await r.json();
+    if (!d.token) throw new Error(d.error || 'connexion_impossible');
+    igConnect = d; igSaveConnect();
+    igLiveLoading = false;
+    igFetchLiveStats(true);
+  } catch(e) {
+    igLiveLoading = false;
+    igLiveError = 'Erreur Instagram : ' + (e && e.message ? e.message : e);
+    igRenderContent();
+  }
+}
 function igoDisconnect(){
   igConnect = null; igLiveStats = null;
   igSaveConnect(); igSaveLiveStats();
@@ -5471,6 +5489,11 @@ function igConnectPanelHtml(){
     return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;text-align:center">
       <div style="font-size:13px;color:var(--dim);margin-bottom:10px">Connecte ton compte Instagram pro pour voir tes vraies stats (vues, abonnés, rétention…)</div>
       <button onclick="igoConnect()" style="background:linear-gradient(45deg,#C13584,#E1306C,#F77737);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer">🔗 Connecter Instagram</button>
+      <div style="font-size:11px;color:var(--dim);margin:12px 0 6px">— ou colle un token généré depuis Graph API Explorer —</div>
+      <div style="display:flex;gap:6px">
+        <input id="ig-manual-token" type="text" placeholder="Token EAA…" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;background:var(--card2);color:inherit">
+        <button onclick="igoConnectWithToken()" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">Valider</button>
+      </div>
       ${igLiveError?`<div style="color:var(--red);font-size:12px;margin-top:10px">${igEsc(igLiveError)}</div>`:''}
     </div>`;
   }
