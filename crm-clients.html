@@ -5212,37 +5212,65 @@ function saveInsta(){
   crmSync();
 }
 
-function seedIgWeekPlan(){
-  if (localStorage.getItem('ig_week_seed_v1')) return;
-  const canvaLink = 'https://canva.link/xoz48ua4wczhr9y';
-  const note = 'Template Canva : ' + canvaLink;
-  const items = [
-    ['2026-11-02','reel','attirer','Réaction (vidéo)'],
-    ['2026-11-02','reel','convaincre','Démo de l’application'],
-    ['2026-11-03','reel','attirer','Conseil face caméra'],
-    ['2026-11-03','post','convaincre','Cas client'],
-    ['2026-11-04','reel','attirer','Cassage de mythe'],
-    ['2026-11-04','reel','convaincre','Extrait d’appel client'],
-    ['2026-11-05','post','attirer','Réaction en carrousel'],
-    ['2026-11-06','reel','attirer','Cassage de mythe'],
-    ['2026-11-06','reel','vendre','Vente — mon accompagnement'],
-    ['2026-11-07','reel','attirer','Conseil'],
-    ['2026-11-07','reel','convaincre','Extrait d’appel client'],
-    ['2026-11-08','story','suivre','Carrousel récap (story)'],
-  ];
-  items.forEach((it, i) => {
-    igIdees.push({
-      id: 'seed_wk1_' + i,
-      titre: it[3],
-      date: it[0],
-      type: it[1],
-      stage: it[2],
-      statut: 'idee',
-      note: note,
+const IG_CANVA_LINK = 'https://canva.link/xoz48ua4wczhr9y';
+// Modèle hebdo répété chaque semaine : [jour (0=lundi..6=dimanche), type, stage, titre]
+const IG_WEEK_TEMPLATE = [
+  [0,'reel','attirer','Réaction (vidéo)'],
+  [0,'reel','convaincre','Démo de l’application'],
+  [1,'reel','attirer','Conseil face caméra'],
+  [1,'post','convaincre','Cas client'],
+  [2,'reel','attirer','Cassage de mythe'],
+  [2,'reel','convaincre','Extrait d’appel client'],
+  [3,'post','attirer','Réaction en carrousel'],
+  [4,'reel','attirer','Cassage de mythe'],
+  [4,'reel','vendre','Vente — mon accompagnement'],
+  [5,'reel','attirer','Conseil'],
+  [5,'reel','convaincre','Extrait d’appel client'],
+  [6,'story','suivre','Carrousel récap (story)'],
+];
+function igMondayOf(d){
+  const dt = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const offset = (dt.getDay() + 6) % 7; // 0 = lundi
+  dt.setDate(dt.getDate() - offset);
+  return dt;
+}
+function igDateStr(d){
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+// Génère automatiquement le plan de contenu (semaine en cours + semaine suivante) à partir du modèle hebdo.
+// Idempotent : chaque semaine n'est générée qu'une fois (suivi via ig_weekly_seeded_mondays).
+function ensureIgWeeklyPlan(){
+  let seededMondays;
+  try{ seededMondays = JSON.parse(localStorage.getItem('ig_weekly_seeded_mondays')) || []; } catch(e){ seededMondays = []; }
+  // migration : la semaine du 2026-11-02 avait été ajoutée par l'ancien système ponctuel
+  if (seededMondays.indexOf('2026-11-02') === -1 && igIdees.some(it => (it.id||'').indexOf('seed_wk1_') === 0)) {
+    seededMondays.push('2026-11-02');
+  }
+  const thisMonday = igMondayOf(new Date());
+  let changed = false;
+  for (let w = 0; w < 2; w++){
+    const monday = new Date(thisMonday);
+    monday.setDate(monday.getDate() + w*7);
+    const mondayStr = igDateStr(monday);
+    if (seededMondays.indexOf(mondayStr) !== -1) continue;
+    IG_WEEK_TEMPLATE.forEach((it, i) => {
+      const d = new Date(monday);
+      d.setDate(d.getDate() + it[0]);
+      igIdees.push({
+        id: 'seed_' + mondayStr + '_' + i,
+        titre: it[3],
+        date: igDateStr(d),
+        type: it[1],
+        stage: it[2],
+        statut: 'idee',
+        note: 'Template Canva : ' + IG_CANVA_LINK,
+      });
     });
-  });
-  localStorage.setItem('ig_week_seed_v1', '1');
-  saveInsta();
+    seededMondays.push(mondayStr);
+    changed = true;
+  }
+  localStorage.setItem('ig_weekly_seeded_mondays', JSON.stringify(seededMondays));
+  if (changed) saveInsta();
 }
 
 function renderInsta(){ igGoView(igView || 'idees'); }
@@ -5469,10 +5497,10 @@ function igDeleteStat(id){
       await driveRequestToken(false);
       await driveLoadIntoApp();
       driveConnectedOnce = true;
-      seedIgWeekPlan();
+      ensureIgWeeklyPlan();
     } catch(e) {
       driveShowGate();
-      seedIgWeekPlan();
+      ensureIgWeeklyPlan();
     }
   }, 300);
 })();
