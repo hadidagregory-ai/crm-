@@ -5389,7 +5389,7 @@ function igHandleAuthRedirect(){
 function igoConnect(){
   const redirectUri = encodeURIComponent('https://crm-woad-iota-63.vercel.app/api/ig-auth-callback');
   const scope = encodeURIComponent('instagram_basic,instagram_manage_insights,pages_show_list,pages_read_engagement,business_management');
-  window.location.href = `https://www.facebook.com/v21.0/dialog/oauth?client_id=1836590414159061&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+  window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=1836590414159061&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
 }
 async function igoConnectWithToken(){
   const input = document.getElementById('ig-manual-token');
@@ -5437,11 +5437,11 @@ async function igFetchLiveStats(force){
   try {
     const token = await igEnsureFreshToken();
     const acc = igConnect.igAccountId;
-    const accRes = await fetch(`https://graph.facebook.com/v21.0/${acc}?fields=followers_count,media_count&access_token=${token}`);
+    const accRes = await fetch(`https://graph.facebook.com/v23.0/${acc}?fields=followers_count,media_count&access_token=${token}`);
     const accData = await accRes.json();
     if (accData.error) throw new Error(accData.error.message);
 
-    const mediaRes = await fetch(`https://graph.facebook.com/v21.0/${acc}/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count&limit=25&access_token=${token}`);
+    const mediaRes = await fetch(`https://graph.facebook.com/v23.0/${acc}/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count&limit=25&access_token=${token}`);
     const mediaData = await mediaRes.json();
     if (mediaData.error) throw new Error(mediaData.error.message);
 
@@ -5453,7 +5453,7 @@ async function igFetchLiveStats(force){
         const metrics = isVideo
           ? 'reach,likes,comments,shares,saved,total_interactions,ig_reels_avg_watch_time,ig_reels_video_view_total_time'
           : 'reach,saved,likes,comments,shares,total_interactions';
-        const insRes = await fetch(`https://graph.facebook.com/v21.0/${m.id}/insights?metric=${metrics}&access_token=${token}`);
+        const insRes = await fetch(`https://graph.facebook.com/v23.0/${m.id}/insights?metric=${metrics}&access_token=${token}`);
         const insData = await insRes.json();
         if (Array.isArray(insData.data)) insData.data.forEach(row => { insights[row.name] = (row.values && row.values[0] && row.values[0].value) || 0; });
       } catch(e){}

@@ -1,7 +1,7 @@
 const APP_ID = '1836590414159061';
 const SITE = 'https://crm-woad-iota-63.vercel.app/';
 const REDIRECT_URI = SITE + 'api/ig-auth-callback';
-const GRAPH = 'https://graph.facebook.com/v21.0';
+const GRAPH = 'https://graph.facebook.com/v23.0';
 
 module.exports = async function handler(req, res) {
   const APP_SECRET = process.env.IG_APP_SECRET;
