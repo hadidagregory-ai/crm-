@@ -26,16 +26,22 @@ module.exports = async function handler(req, res) {
     if (!pages.length) { res.status(400).json({ error: 'no_facebook_page_found', detail: pagesData }); return; }
 
     let igAccountId = null, pageName = null;
+    const pageErrors = [];
     for (const p of pages) {
       const igRes = await fetch(`${GRAPH}/${p.id}?fields=instagram_business_account&access_token=${userToken}`);
       const igData = await igRes.json();
+      if (igData.error) { pageErrors.push(p.name + ': ' + igData.error.message); continue; }
       if (igData.instagram_business_account && igData.instagram_business_account.id) {
         igAccountId = igData.instagram_business_account.id;
         pageName = p.name;
         break;
       }
     }
-    if (!igAccountId) { res.status(400).json({ error: 'no_instagram_business_account_linked' }); return; }
+    if (!igAccountId) {
+      if (pageErrors.length) { res.status(400).json({ error: 'permission_error: ' + pageErrors.join(' | ') }); return; }
+      res.status(400).json({ error: 'no_instagram_business_account_linked (pages trouvées: ' + pages.map(p=>p.name).join(', ') + ')' });
+      return;
+    }
 
     res.status(200).json({ token: userToken, igAccountId, pageName, expiresAt: Date.now() + expiresIn * 1000 });
   } catch (e) {

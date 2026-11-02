@@ -35,16 +35,21 @@ module.exports = async function handler(req, res) {
     if (!pages.length) return fail('no_facebook_page_found');
 
     let igAccountId = null, pageName = null;
+    const pageErrors = [];
     for (const p of pages) {
       const igRes = await fetch(`${GRAPH}/${p.id}?fields=instagram_business_account&access_token=${userToken}`);
       const igData = await igRes.json();
+      if (igData.error) { pageErrors.push(igData.error.message); continue; }
       if (igData.instagram_business_account && igData.instagram_business_account.id) {
         igAccountId = igData.instagram_business_account.id;
         pageName = p.name;
         break;
       }
     }
-    if (!igAccountId) return fail('no_instagram_business_account_linked');
+    if (!igAccountId) {
+      if (pageErrors.length) return fail('permission_error: ' + pageErrors.join(' | '));
+      return fail('no_instagram_business_account_linked');
+    }
 
     const expiresAt = Date.now() + expiresIn * 1000;
     const payload = { token: userToken, igAccountId, pageName, expiresAt };
