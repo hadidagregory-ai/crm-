@@ -5242,24 +5242,23 @@ function igDateStr(d){
 // Génère automatiquement le plan de contenu (semaine en cours + semaine suivante) à partir du modèle hebdo.
 // Idempotent : chaque semaine n'est générée qu'une fois (suivi via ig_weekly_seeded_mondays).
 function ensureIgWeeklyPlan(){
-  let seededMondays;
-  try{ seededMondays = JSON.parse(localStorage.getItem('ig_weekly_seeded_mondays')) || []; } catch(e){ seededMondays = []; }
-  // migration : la semaine du 2026-11-02 avait été ajoutée par l'ancien système ponctuel
-  if (seededMondays.indexOf('2026-11-02') === -1 && igIdees.some(it => (it.id||'').indexOf('seed_wk1_') === 0)) {
-    seededMondays.push('2026-11-02');
-  }
+  // Vérifie directement les données (pas un drapeau à part) : si Drive a écrasé igIdees
+  // entre deux appels, les cartes de la semaine manquent et sont régénérées ici même.
   const thisMonday = igMondayOf(new Date());
   let changed = false;
   for (let w = 0; w < 2; w++){
     const monday = new Date(thisMonday);
     monday.setDate(monday.getDate() + w*7);
     const mondayStr = igDateStr(monday);
-    if (seededMondays.indexOf(mondayStr) !== -1) continue;
+    const prefix = 'seed_' + mondayStr + '_';
+    const alreadyThere = igIdees.some(it => (it.id||'').indexOf(prefix) === 0)
+      || (mondayStr === '2026-11-02' && igIdees.some(it => (it.id||'').indexOf('seed_wk1_') === 0));
+    if (alreadyThere) continue;
     IG_WEEK_TEMPLATE.forEach((it, i) => {
       const d = new Date(monday);
       d.setDate(d.getDate() + it[0]);
       igIdees.push({
-        id: 'seed_' + mondayStr + '_' + i,
+        id: prefix + i,
         titre: it[3],
         date: igDateStr(d),
         type: it[1],
@@ -5268,10 +5267,8 @@ function ensureIgWeeklyPlan(){
         note: 'Template Canva : ' + IG_CANVA_LINK,
       });
     });
-    seededMondays.push(mondayStr);
     changed = true;
   }
-  localStorage.setItem('ig_weekly_seeded_mondays', JSON.stringify(seededMondays));
   if (changed) saveInsta();
 }
 
