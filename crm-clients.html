@@ -5212,6 +5212,39 @@ function saveInsta(){
   crmSync();
 }
 
+function seedIgWeekPlan(){
+  if (localStorage.getItem('ig_week_seed_v1')) return;
+  const canvaLink = 'https://canva.link/xoz48ua4wczhr9y';
+  const note = 'Template Canva : ' + canvaLink;
+  const items = [
+    ['2026-11-02','reel','attirer','Réaction (vidéo)'],
+    ['2026-11-02','reel','convaincre','Démo de l’application'],
+    ['2026-11-03','reel','attirer','Conseil face caméra'],
+    ['2026-11-03','post','convaincre','Cas client'],
+    ['2026-11-04','reel','attirer','Cassage de mythe'],
+    ['2026-11-04','reel','convaincre','Extrait d’appel client'],
+    ['2026-11-05','post','attirer','Réaction en carrousel'],
+    ['2026-11-06','reel','attirer','Cassage de mythe'],
+    ['2026-11-06','reel','vendre','Vente — mon accompagnement'],
+    ['2026-11-07','reel','attirer','Conseil'],
+    ['2026-11-07','reel','convaincre','Extrait d’appel client'],
+    ['2026-11-08','story','suivre','Carrousel récap (story)'],
+  ];
+  items.forEach((it, i) => {
+    igIdees.push({
+      id: 'seed_wk1_' + i,
+      titre: it[3],
+      date: it[0],
+      type: it[1],
+      stage: it[2],
+      statut: 'idee',
+      note: note,
+    });
+  });
+  localStorage.setItem('ig_week_seed_v1', '1');
+  saveInsta();
+}
+
 function renderInsta(){ igGoView(igView || 'idees'); }
 
 function igGoView(view){
@@ -5436,8 +5469,10 @@ function igDeleteStat(id){
       await driveRequestToken(false);
       await driveLoadIntoApp();
       driveConnectedOnce = true;
+      seedIgWeekPlan();
     } catch(e) {
       driveShowGate();
+      seedIgWeekPlan();
     }
   }, 300);
 })();
