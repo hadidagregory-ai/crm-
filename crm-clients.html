@@ -536,6 +536,103 @@ header{
 <!-- FAB orga — caché sauf sur page orga -->
 <button id="orga-fab" onclick="orgaOpenAddTask()" style="display:none;position:fixed;bottom:72px;right:16px;width:50px;height:50px;border-radius:50%;background:var(--green);border:none;color:#fff;font-size:26px;cursor:pointer;box-shadow:0 4px 18px rgba(91,189,53,.5);z-index:90;align-items:center;justify-content:center;line-height:1">+</button>
 
+<!-- ══════════════ PAGE : CONTENU INSTAGRAM ══════════════ -->
+<div class="page" id="page-insta">
+  <!-- SOUS-ONGLETS -->
+  <div style="background:var(--card);border-bottom:1px solid var(--border);display:flex;flex-shrink:0">
+    <button id="ig-tab-idees" onclick="igGoView('idees')"
+      style="flex:1;padding:11px 0;background:none;border:none;border-bottom:2px solid var(--green);color:var(--green);font-size:12px;font-weight:700;cursor:pointer">Idées</button>
+    <button id="ig-tab-stories" onclick="igGoView('stories')"
+      style="flex:1;padding:11px 0;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);font-size:12px;cursor:pointer">Stories</button>
+    <button id="ig-tab-cal" onclick="igGoView('cal')"
+      style="flex:1;padding:11px 0;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);font-size:12px;cursor:pointer">Calendrier</button>
+    <button id="ig-tab-stats" onclick="igGoView('stats')"
+      style="flex:1;padding:11px 0;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);font-size:12px;cursor:pointer">Stats</button>
+  </div>
+  <!-- FILTRES (idées/stories) -->
+  <div id="ig-filters" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:8px 12px;background:var(--card2);border-bottom:1px solid var(--border);flex-shrink:0"></div>
+  <!-- CONTENU -->
+  <div id="ig-content" style="overflow-y:auto;flex:1;padding:12px 14px 90px"></div>
+</div>
+<!-- FAB insta — caché sauf sur page insta -->
+<button id="ig-fab" onclick="igOpenAddFromView()" style="display:none;position:fixed;bottom:72px;right:16px;width:50px;height:50px;border-radius:50%;background:#C13584;border:none;color:#fff;font-size:26px;cursor:pointer;box-shadow:0 4px 18px rgba(193,53,132,.5);z-index:90;align-items:center;justify-content:center;line-height:1">+</button>
+
+<!-- MODAL IDÉE / REEL / STORY -->
+<div class="overlay" id="ig-overlay" onclick="if(event.target===this)igCloseModal()">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div id="ig-modal-title" style="font-size:17px;font-weight:800;margin-bottom:16px">Nouvelle idée</div>
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Type</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px">
+      <button id="igm-type-post" onclick="igSetType('post')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🖼️ Post</button>
+      <button id="igm-type-reel" onclick="igSetType('reel')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🎬 Reel</button>
+      <button id="igm-type-story" onclick="igSetType('story')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">⭐ Story</button>
+    </div>
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Titre *</label>
+    <input id="igm-titre" type="text" placeholder="Ex: Routine mobilité avant combat" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card2);color:inherit;margin:4px 0 12px">
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Objectif</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px">
+      <button id="igm-stage-attirer" onclick="igSetStage('attirer')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🧲 Attirer</button>
+      <button id="igm-stage-convaincre" onclick="igSetStage('convaincre')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🤝 Convaincre</button>
+      <button id="igm-stage-vendre" onclick="igSetStage('vendre')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">💰 Vendre</button>
+      <button id="igm-stage-suivre" onclick="igSetStage('suivre')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🔁 Suivre</button>
+    </div>
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Statut</label>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px">
+      <button id="igm-statut-idee" onclick="igSetStatut('idee')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">💡 Idée</button>
+      <button id="igm-statut-pret" onclick="igSetStatut('pret')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🎞️ Prêt</button>
+      <button id="igm-statut-publie" onclick="igSetStatut('publie')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">✅ Publié</button>
+    </div>
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Date prévue (optionnel)</label>
+    <input id="igm-date" type="date" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card2);color:inherit;margin:4px 0 12px">
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Notes / script / idée de légende</label>
+    <textarea id="igm-note" rows="3" placeholder="Détails, accroche, call-to-action…" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;background:var(--card2);color:inherit;resize:none;margin:4px 0 16px"></textarea>
+
+    <input type="hidden" id="igm-id">
+    <div style="display:flex;gap:8px">
+      <button onclick="igSave()" style="flex:1;background:#C13584;color:#fff;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">Enregistrer</button>
+      <button id="igm-delete-btn" onclick="igDelete(document.getElementById('igm-id').value)" style="display:none;background:rgba(255,87,87,.1);border:1px solid var(--red);border-radius:12px;padding:13px 14px;font-size:14px;cursor:pointer;color:var(--red)">🗑</button>
+      <button onclick="igCloseModal()" style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:13px 16px;font-size:15px;cursor:pointer">✕</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL STATS INSTAGRAM -->
+<div class="overlay" id="ig-stat-overlay" onclick="if(event.target===this)igCloseStatModal()">
+  <div class="modal" style="max-height:92vh;overflow-y:auto">
+    <div class="modal-handle"></div>
+    <div style="font-size:17px;font-weight:800;margin-bottom:16px">Relevé de stats</div>
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Date *</label>
+    <input id="igs-date" type="date" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card2);color:inherit;margin:4px 0 12px">
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Abonnés</label>
+    <input id="igs-abonnes" type="number" placeholder="Ex: 4230" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card2);color:inherit;margin:4px 0 12px">
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Portée (7j)</label>
+    <input id="igs-portee" type="number" placeholder="Ex: 12000" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card2);color:inherit;margin:4px 0 12px">
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Interactions (7j)</label>
+    <input id="igs-interactions" type="number" placeholder="Ex: 850" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card2);color:inherit;margin:4px 0 12px">
+
+    <label style="font-size:12px;font-weight:700;color:var(--dim)">Note</label>
+    <textarea id="igs-note" rows="2" placeholder="Ex: pic après le reel du 12…" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13px;background:var(--card2);color:inherit;resize:none;margin:4px 0 16px"></textarea>
+
+    <input type="hidden" id="igs-id">
+    <div style="display:flex;gap:8px">
+      <button onclick="igSaveStat()" style="flex:1;background:#C13584;color:#fff;border:none;border-radius:12px;padding:13px;font-size:15px;font-weight:700;cursor:pointer">Enregistrer</button>
+      <button id="igs-delete-btn" onclick="igDeleteStat(document.getElementById('igs-id').value)" style="display:none;background:rgba(255,87,87,.1);border:1px solid var(--red);border-radius:12px;padding:13px 14px;font-size:14px;cursor:pointer;color:var(--red)">🗑</button>
+      <button onclick="igCloseStatModal()" style="background:var(--card2);border:1px solid var(--border);border-radius:12px;padding:13px 16px;font-size:15px;cursor:pointer">✕</button>
+    </div>
+  </div>
+</div>
+
 <!-- MODAL TÂCHE ORGA -->
 <div class="overlay" id="orga-task-overlay" onclick="orgaCloseTaskIfBg(event)">
   <div class="modal" style="max-height:92vh;overflow-y:auto">
@@ -647,9 +744,9 @@ header{
     <span class="nav-icon">📊</span>
     Prog
   </button>
-  <button class="nav-item" id="nav-orga" onclick="goPage('orga')">
-    <span class="nav-icon">🗂️</span>
-    Mon Orga
+  <button class="nav-item" id="nav-insta" onclick="goPage('insta')">
+    <span class="nav-icon">📸</span>
+    Contenu
   </button>
   <button class="nav-item" onclick="window.location.href='https://deploy-trainingjudo.vercel.app/'">
     <span class="nav-icon">🥋</span>
@@ -876,7 +973,7 @@ function crmSetDot(color, title) {
 }
 
 function crmGetAllData() {
-  return { clients, prospects, compta: CD, orgaTaches, orgaReps, orgaRepDone, progObjectifs };
+  return { clients, prospects, compta: CD, orgaTaches, orgaReps, orgaRepDone, progObjectifs, igIdees, igStats };
 }
 
 function driveShowGate(msg) {
@@ -1029,9 +1126,11 @@ async function driveLoadIntoApp() {
     orgaTaches     = data.orgaTaches     || [];
     orgaReps       = data.orgaReps       || [];
     orgaRepDone    = data.orgaRepDone    || {};
+    igIdees        = data.igIdees        || [];
+    igStats        = data.igStats        || [];
     if (data.compta)        CD             = data.compta;
     if (data.progObjectifs) progObjectifs  = data.progObjectifs;
-    save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs();
+    save(); saveP(); saveCompta(); saveOrga(); saveProgObjectifs(); saveInsta();
     render(); renderToday(); renderProspects();
     crmSetDot('#5BBD35', 'Drive ✓ — ' + clients.length + ' clients');
     return true;
@@ -1130,8 +1229,11 @@ function goPage(name){
   if(name==='cal') renderCal();
   if(name==='prog') renderProg();
   if(name==='orga') renderOrga();
+  if(name==='insta') renderInsta();
   const fab=document.getElementById('orga-fab');
   if(fab) fab.style.display=name==='orga'?'flex':'none';
+  const igFab=document.getElementById('ig-fab');
+  if(igFab) igFab.style.display=name==='insta'?'flex':'none';
 }
 
 /* ════════════════════════════════════
@@ -5069,10 +5171,260 @@ function patchFiches(){
 }
 
 /* ════════════════════════════════════
+   PAGE : CONTENU INSTAGRAM
+   Idées (posts/reels) + Stories + Calendrier + Stats.
+   Pas de connexion API Instagram (organisation manuelle) — stocké comme
+   le reste (localStorage + sync Drive via crmSync).
+════════════════════════════════════ */
+let igIdees = [];
+let igStats = [];
+let igView = 'idees';
+let igFilterStage = 'tous';
+let igFilterType = 'tous';
+let igCurrentType = 'post', igCurrentStage = 'attirer', igCurrentStatut = 'idee';
+
+const IG_TYPE_META = {
+  post:  { icon:'🖼️', label:'Post' },
+  reel:  { icon:'🎬', label:'Reel' },
+  story: { icon:'⭐', label:'Story' },
+};
+const IG_STAGE_META = {
+  attirer:    { icon:'🧲', label:'Attirer',    color:'var(--orange)' },
+  convaincre: { icon:'🤝', label:'Convaincre', color:'#3578C4' },
+  vendre:     { icon:'💰', label:'Vendre',     color:'var(--red)' },
+  suivre:     { icon:'🔁', label:'Suivre',     color:'var(--green)' },
+};
+const IG_STATUT_META = {
+  idee:   { icon:'💡', label:'Idée',   color:'var(--dim)' },
+  pret:   { icon:'🎞️', label:'Prêt',   color:'var(--orange)' },
+  publie: { icon:'✅', label:'Publié', color:'var(--green)' },
+};
+
+function igEsc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+function loadInsta(){
+  try{ igIdees = JSON.parse(localStorage.getItem('igIdees')) || []; } catch(e){ igIdees = []; }
+  try{ igStats = JSON.parse(localStorage.getItem('igStats')) || []; } catch(e){ igStats = []; }
+}
+function saveInsta(){
+  localStorage.setItem('igIdees', JSON.stringify(igIdees));
+  localStorage.setItem('igStats', JSON.stringify(igStats));
+  crmSync();
+}
+
+function renderInsta(){ igGoView(igView || 'idees'); }
+
+function igGoView(view){
+  igView = view;
+  ['idees','stories','cal','stats'].forEach(v=>{
+    const btn = document.getElementById('ig-tab-'+v);
+    if(!btn) return;
+    btn.style.borderBottomColor = v===view ? '#C13584' : 'transparent';
+    btn.style.color = v===view ? '#C13584' : 'var(--dim)';
+    btn.style.fontWeight = v===view ? '700' : '400';
+  });
+  document.getElementById('ig-filters').style.display = (view==='idees'||view==='stories') ? 'flex' : 'none';
+  igRenderContent();
+}
+function igRenderContent(){
+  if(igView==='idees') igRenderIdees();
+  else if(igView==='stories') igRenderStories();
+  else if(igView==='cal') igRenderCal();
+  else if(igView==='stats') igRenderStats();
+}
+
+function igChip(label, active, onclick){
+  return `<button onclick="${onclick}" style="flex-shrink:0;padding:5px 12px;border-radius:20px;border:1px solid ${active?'#C13584':'var(--border)'};background:${active?'#C13584':'var(--card2)'};color:${active?'#fff':'inherit'};font-size:12px;cursor:pointer">${label}</button>`;
+}
+function igFilterChipsHtml(){
+  const stages=[['tous','Tous'],['attirer','🧲 Attirer'],['convaincre','🤝 Convaincre'],['vendre','💰 Vendre'],['suivre','🔁 Suivre']];
+  let html = stages.map(([k,label])=>igChip(label, igFilterStage===k, `igSetFilterStage('${k}')`)).join('');
+  if(igView==='idees'){
+    const types=[['tous','Tous types'],['post','🖼️ Post'],['reel','🎬 Reel']];
+    html += '<span style="width:1px;background:var(--border);flex-shrink:0;margin:0 2px"></span>' + types.map(([k,label])=>igChip(label, igFilterType===k, `igSetFilterType('${k}')`)).join('');
+  }
+  return html;
+}
+function igSetFilterStage(s){ igFilterStage=s; igRenderContent(); }
+function igSetFilterType(t){ igFilterType=t; igRenderContent(); }
+
+function igEmptyHtml(icon, label){ return `<div style="text-align:center;padding:60px 0;color:var(--dim)">${label}<br><span style="font-size:24px">${icon}</span></div>`; }
+
+function igCardHtml(it){
+  const tm = IG_TYPE_META[it.type] || IG_TYPE_META.post;
+  const sm = IG_STAGE_META[it.stage] || IG_STAGE_META.attirer;
+  const um = IG_STATUT_META[it.statut] || IG_STATUT_META.idee;
+  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+    <div style="display:flex;align-items:flex-start;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
+          <span style="font-size:13px">${tm.icon}</span>
+          <span style="font-size:14px;font-weight:700">${igEsc(it.titre)}</span>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:11px;font-weight:700;color:${sm.color}">${sm.icon} ${sm.label}</span>
+          <span style="font-size:11px;color:var(--dim)">·</span>
+          <span style="font-size:11px;font-weight:700;color:${um.color}">${um.icon} ${um.label}</span>
+          ${it.date?`<span style="font-size:11px;color:var(--dim)">· 📅 ${fmtDateShort(it.date)}</span>`:''}
+        </div>
+        ${it.note?`<div style="font-size:12px;color:var(--dim);margin-top:6px">${igEsc(it.note)}</div>`:''}
+      </div>
+      <button onclick="igOpenModal('${it.id}')" style="background:none;border:none;color:var(--dim);font-size:18px;cursor:pointer;padding:0 2px;line-height:1">✎</button>
+    </div>
+  </div>`;
+}
+
+function igRenderIdees(){
+  document.getElementById('ig-filters').innerHTML = igFilterChipsHtml();
+  const items = igIdees.filter(x=>x.type!=='story')
+    .filter(x=>igFilterType==='tous'||x.type===igFilterType)
+    .filter(x=>igFilterStage==='tous'||x.stage===igFilterStage)
+    .sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||(b.createdAt||0)-(a.createdAt||0));
+  document.getElementById('ig-content').innerHTML = items.length ? items.map(igCardHtml).join('') : igEmptyHtml('💡','Aucune idée pour l’instant');
+}
+function igRenderStories(){
+  document.getElementById('ig-filters').innerHTML = igFilterChipsHtml();
+  const items = igIdees.filter(x=>x.type==='story')
+    .filter(x=>igFilterStage==='tous'||x.stage===igFilterStage)
+    .sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')||(b.createdAt||0)-(a.createdAt||0));
+  document.getElementById('ig-content').innerHTML = items.length ? items.map(igCardHtml).join('') : igEmptyHtml('⭐','Aucune story pour l’instant');
+}
+function igRenderCal(){
+  const items = igIdees.filter(x=>x.date).sort((a,b)=>a.date.localeCompare(b.date));
+  if(!items.length){ document.getElementById('ig-content').innerHTML = igEmptyHtml('🗓️','Aucun contenu planifié'); return; }
+  const byDate = {};
+  items.forEach(it=>{ (byDate[it.date] = byDate[it.date] || []).push(it); });
+  let h='';
+  Object.keys(byDate).forEach(d=>{
+    h += `<div style="margin-bottom:14px">
+      <div style="font-size:11px;font-weight:700;color:var(--dim);letter-spacing:.5px;margin-bottom:6px">${fmtDate(d).toUpperCase()}</div>
+      ${byDate[d].map(igCardHtml).join('')}
+    </div>`;
+  });
+  document.getElementById('ig-content').innerHTML = h;
+}
+function igRenderStats(){
+  const sorted=[...igStats].sort((a,b)=>b.date.localeCompare(a.date));
+  let h=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+    <div style="font-size:14px;font-weight:800">Évolution</div>
+    <button onclick="igOpenStatModal()" style="background:#C13584;color:#fff;border:none;border-radius:10px;padding:7px 14px;font-size:13px;font-weight:700;cursor:pointer">+ Relevé</button>
+  </div>`;
+  if(!sorted.length){ document.getElementById('ig-content').innerHTML = h + igEmptyHtml('📈','Aucun relevé pour l’instant'); return; }
+  sorted.forEach((s,i)=>{
+    const prev = sorted[i+1];
+    const diff = (prev && s.abonnes!=null && prev.abonnes!=null) ? s.abonnes-prev.abonnes : null;
+    h += `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:13px;font-weight:700">${fmtDate(s.date)}</span>
+        <button onclick="igOpenStatModal('${s.id}')" style="background:none;border:none;color:var(--dim);font-size:16px;cursor:pointer">✎</button>
+      </div>
+      <div style="display:flex;gap:14px;flex-wrap:wrap;font-size:12px">
+        ${s.abonnes!=null?`<span><b>${s.abonnes}</b> abonnés${diff!=null?` <span style="color:${diff>=0?'var(--green)':'var(--red)'}">(${diff>=0?'+':''}${diff})</span>`:''}</span>`:''}
+        ${s.portee!=null?`<span><b>${s.portee}</b> portée</span>`:''}
+        ${s.interactions!=null?`<span><b>${s.interactions}</b> interactions</span>`:''}
+      </div>
+      ${s.note?`<div style="font-size:12px;color:var(--dim);margin-top:6px">${igEsc(s.note)}</div>`:''}
+    </div>`;
+  });
+  document.getElementById('ig-content').innerHTML = h;
+}
+
+function igOpenAddFromView(){
+  igOpenModal(null, igView==='stories' ? 'story' : 'post');
+}
+function igOpenModal(id, presetType){
+  const it = id ? igIdees.find(x=>x.id===id) : null;
+  document.getElementById('igm-id').value = id || '';
+  document.getElementById('igm-titre').value = it ? it.titre : '';
+  document.getElementById('igm-date').value = it ? (it.date||'') : '';
+  document.getElementById('igm-note').value = it ? (it.note||'') : '';
+  document.getElementById('ig-modal-title').textContent = it ? 'Modifier' : 'Nouvelle idée';
+  document.getElementById('igm-delete-btn').style.display = it ? '' : 'none';
+  igSetType(it ? it.type : (presetType||'post'));
+  igSetStage(it ? (it.stage||'attirer') : 'attirer');
+  igSetStatut(it ? (it.statut||'idee') : 'idee');
+  document.getElementById('ig-overlay').classList.add('open');
+}
+function igSetType(t){
+  igCurrentType = t;
+  ['post','reel','story'].forEach(k=>{
+    const btn = document.getElementById('igm-type-'+k);
+    if(btn){ btn.style.background = k===t?'#C13584':'var(--card2)'; btn.style.color = k===t?'#fff':'inherit'; btn.style.borderColor = k===t?'#C13584':'var(--border)'; }
+  });
+}
+function igSetStage(s){
+  igCurrentStage = s;
+  ['attirer','convaincre','vendre','suivre'].forEach(k=>{
+    const btn = document.getElementById('igm-stage-'+k);
+    if(btn){ btn.style.background = k===s?'#C13584':'var(--card2)'; btn.style.color = k===s?'#fff':'inherit'; btn.style.borderColor = k===s?'#C13584':'var(--border)'; }
+  });
+}
+function igSetStatut(s){
+  igCurrentStatut = s;
+  ['idee','pret','publie'].forEach(k=>{
+    const btn = document.getElementById('igm-statut-'+k);
+    if(btn){ btn.style.background = k===s?'#C13584':'var(--card2)'; btn.style.color = k===s?'#fff':'inherit'; btn.style.borderColor = k===s?'#C13584':'var(--border)'; }
+  });
+}
+function igCloseModal(){ document.getElementById('ig-overlay').classList.remove('open'); }
+function igSave(){
+  const titre = document.getElementById('igm-titre').value.trim();
+  if(!titre){ alert('Le titre est obligatoire'); return; }
+  const id = document.getElementById('igm-id').value;
+  const date = document.getElementById('igm-date').value;
+  const note = document.getElementById('igm-note').value.trim();
+  if(id){
+    const it = igIdees.find(x=>x.id===id);
+    if(it){ it.titre=titre; it.type=igCurrentType; it.stage=igCurrentStage; it.statut=igCurrentStatut; it.date=date; it.note=note; }
+  } else {
+    igIdees.push({ id: uid(), titre, type: igCurrentType, stage: igCurrentStage, statut: igCurrentStatut, date, note, createdAt: Date.now() });
+  }
+  saveInsta(); igCloseModal(); igRenderContent();
+}
+function igDelete(id){
+  igIdees = igIdees.filter(x=>x.id!==id);
+  saveInsta(); igCloseModal(); igRenderContent();
+}
+
+function igOpenStatModal(id){
+  const s = id ? igStats.find(x=>x.id===id) : null;
+  document.getElementById('igs-id').value = id || '';
+  document.getElementById('igs-date').value = s ? s.date : today();
+  document.getElementById('igs-abonnes').value = (s && s.abonnes!=null) ? s.abonnes : '';
+  document.getElementById('igs-portee').value = (s && s.portee!=null) ? s.portee : '';
+  document.getElementById('igs-interactions').value = (s && s.interactions!=null) ? s.interactions : '';
+  document.getElementById('igs-note').value = s ? (s.note||'') : '';
+  document.getElementById('igs-delete-btn').style.display = s ? '' : 'none';
+  document.getElementById('ig-stat-overlay').classList.add('open');
+}
+function igCloseStatModal(){ document.getElementById('ig-stat-overlay').classList.remove('open'); }
+function igSaveStat(){
+  const date = document.getElementById('igs-date').value;
+  if(!date){ alert('La date est obligatoire'); return; }
+  const id = document.getElementById('igs-id').value;
+  const toNum = v => v===''?null:Number(v);
+  const abonnes = toNum(document.getElementById('igs-abonnes').value);
+  const portee = toNum(document.getElementById('igs-portee').value);
+  const interactions = toNum(document.getElementById('igs-interactions').value);
+  const note = document.getElementById('igs-note').value.trim();
+  if(id){
+    const s = igStats.find(x=>x.id===id);
+    if(s){ s.date=date; s.abonnes=abonnes; s.portee=portee; s.interactions=interactions; s.note=note; }
+  } else {
+    igStats.push({ id: uid(), date, abonnes, portee, interactions, note });
+  }
+  saveInsta(); igCloseStatModal(); igRenderContent();
+}
+function igDeleteStat(id){
+  igStats = igStats.filter(x=>x.id!==id);
+  saveInsta(); igCloseStatModal(); igRenderContent();
+}
+
+/* ════════════════════════════════════
    INIT — auto-load cloud si vide
 ════════════════════════════════════ */
 (async function init() {
-  load(); loadCompta(); loadProgObjectifs(); loadOrga();
+  load(); loadCompta(); loadProgObjectifs(); loadOrga(); loadInsta();
   patchFiches(); render(); renderToday(); renderProspects();
 
   // Porte d'entrée : on essaie une reconnexion silencieuse (sans popup, marche si
