@@ -1,5 +1,8 @@
 {
   "rewrites": [
     { "source": "/", "destination": "/crm-clients.html" }
+  ],
+  "crons": [
+    { "path": "/api/ig-cron-publish", "schedule": "*/15 * * * *" }
   ]
 }

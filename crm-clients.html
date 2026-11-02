@@ -548,6 +548,8 @@ header{
       style="flex:1;padding:11px 0;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);font-size:12px;cursor:pointer">Calendrier</button>
     <button id="ig-tab-stats" onclick="igGoView('stats')"
       style="flex:1;padding:11px 0;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);font-size:12px;cursor:pointer">Stats</button>
+    <button id="ig-tab-prog" onclick="igGoView('prog')"
+      style="flex:1;padding:11px 0;background:none;border:none;border-bottom:2px solid transparent;color:var(--dim);font-size:12px;cursor:pointer">Programmer</button>
   </div>
   <!-- FILTRES (idées/stories) -->
   <div id="ig-filters" style="display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:8px 12px;background:var(--card2);border-bottom:1px solid var(--border);flex-shrink:0"></div>
@@ -5262,7 +5264,7 @@ function renderInsta(){ igGoView(igView || 'idees'); }
 
 function igGoView(view){
   igView = view;
-  ['idees','stories','cal','stats'].forEach(v=>{
+  ['idees','stories','cal','stats','prog'].forEach(v=>{
     const btn = document.getElementById('ig-tab-'+v);
     if(!btn) return;
     btn.style.borderBottomColor = v===view ? '#C13584' : 'transparent';
@@ -5277,6 +5279,7 @@ function igRenderContent(){
   else if(igView==='stories') igRenderStories();
   else if(igView==='cal') igRenderCal();
   else if(igView==='stats') igRenderStats();
+  else if(igView==='prog') igRenderProg();
 }
 
 // Petit menu déroulant pour trier par objectif (remplace l'ancienne barre de filtres).
@@ -5350,13 +5353,14 @@ function igRenderCal(){
   });
   document.getElementById('ig-content').innerHTML = h;
 }
-/* ───── Stats Instagram via Windsor.ai ─────
-   Windsor gère sa propre connexion à Instagram côté windsor.ai (aucune auth à
-   faire dans le CRM). Le serveur lit WINDSOR_API_KEY et appelle Windsor pour
-   le compte ; le navigateur n'a jamais la clé. */
+/* ───── Stats + publication + réponses automatiques (API Instagram officielle) ─────
+   Le jeton Instagram vit uniquement côté serveur (fichier dans Vercel Blob),
+   jamais dans le navigateur. Le CRM appelle juste /api/ig-* ; le cron Vercel
+   publie les posts programmés tout seul, même navigateur fermé. */
 let igLiveStats = null;
 let igLiveLoading = false;
 let igLiveError = null;
+let igConnStatus = null; // { connected, username, pageName }
 
 function igLoadConnect(){
   try{ igLiveStats = JSON.parse(localStorage.getItem('igLiveStats')) || null; } catch(e){ igLiveStats = null; }
@@ -5365,8 +5369,53 @@ function igSaveLiveStats(){
   if (igLiveStats) localStorage.setItem('igLiveStats', JSON.stringify(igLiveStats));
   else localStorage.removeItem('igLiveStats');
 }
+function igHandleAuthRedirect(){
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('ig_connected')) { igLiveError = null; params.delete('ig_connected'); }
+  if (params.get('ig_error')) { igLiveError = 'Connexion Instagram échouée (' + params.get('ig_error') + ')'; params.delete('ig_error'); }
+  if (window.location.search) {
+    const qs = params.toString();
+    history.replaceState(null, '', window.location.pathname + (qs?('?'+qs):''));
+  }
+}
+async function igCheckStatus(){
+  try {
+    const r = await fetch('/api/ig-status');
+    igConnStatus = await r.json();
+  } catch(e) { igConnStatus = { connected: false }; }
+}
+function igoConnect(){
+  const redirectUri = encodeURIComponent('https://crm-woad-iota-63.vercel.app/api/ig-auth-callback');
+  const scope = encodeURIComponent('instagram_basic,instagram_manage_insights,instagram_content_publish,instagram_manage_comments,instagram_manage_messages,pages_show_list,pages_read_engagement,business_management');
+  window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=1836590414159061&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+}
+async function igoConnectWithToken(){
+  const input = document.getElementById('ig-manual-token');
+  const token = input ? input.value.trim() : '';
+  if (!token) { alert('Colle ton token Graph API Explorer'); return; }
+  igLiveLoading = true; igLiveError = null; igRenderContent();
+  try {
+    const r = await fetch('/api/ig-connect-token', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ token }) });
+    const d = await r.json();
+    if (!d.ok) throw new Error(d.error || 'connexion_impossible');
+    igLiveLoading = false;
+    await igCheckStatus();
+    igFetchLiveStats(true);
+  } catch(e) {
+    igLiveLoading = false;
+    igLiveError = 'Erreur Instagram : ' + (e && e.message ? e.message : e);
+    igRenderContent();
+  }
+}
+async function igoDisconnect(){
+  await fetch('/api/ig-disconnect', { method: 'POST' });
+  igLiveStats = null; igSaveLiveStats();
+  await igCheckStatus();
+  igRenderContent();
+}
 async function igFetchLiveStats(force){
   if (igLiveLoading) return;
+  if (!igConnStatus || !igConnStatus.connected) return;
   if (!force && igLiveStats && (Date.now() - igLiveStats.fetchedAt) < 15*60*1000) return;
   igLiveLoading = true; igLiveError = null;
   igRenderContent();
@@ -5382,46 +5431,68 @@ async function igFetchLiveStats(force){
   igLiveLoading = false;
   igRenderContent();
 }
+async function igoReplyToCommenters(mediaId){
+  const message = window.prompt('Message privé à envoyer à tous ceux qui ont commenté ce post :');
+  if (!message) return;
+  if (!confirm('Envoyer ce message à tous les commentateurs (non encore contactés) de ce post ?')) return;
+  try {
+    const r = await fetch('/api/ig-reply-commenters', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, message }) });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    alert(`Envoyé à ${d.sent} commentateur(s). ${d.skippedAlreadyMessaged} déjà contactés avant, ${d.failed} échecs.`);
+  } catch(e) {
+    alert('Erreur : ' + (e && e.message ? e.message : e));
+  }
+}
 function igMediaRowHtml(m){
-  return `<a href="${m.permalink}" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit;padding:6px 0;border-top:1px solid var(--border)">
-    <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${igEsc((m.caption||'(sans légende)').slice(0,60))}</div>
-    <div style="font-size:11px;color:var(--dim)">👁️ ${m.views||m.reach||0} vues · ❤️ ${m.likes} · 💬 ${m.comments}${m.saved?` · 🔖 ${m.saved}`:''}</div>
-  </a>`;
+  return `<div style="padding:6px 0;border-top:1px solid var(--border)">
+    <a href="${m.permalink}" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit">
+      <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${igEsc((m.caption||'(sans légende)').slice(0,60))}</div>
+      <div style="font-size:11px;color:var(--dim)">👁️ ${m.reach||0} · ❤️ ${m.likes} · 💬 ${m.comments}${m.avgWatch!=null?` · ⏱️ ${Math.round(m.avgWatch)}s moy.`:''}</div>
+    </a>
+    <button onclick="igoReplyToCommenters('${m.id}')" style="margin-top:4px;background:none;border:1px solid var(--border);border-radius:8px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--dim)">✉️ Répondre aux commentaires</button>
+  </div>`;
 }
 function igConnectPanelHtml(){
+  if (!igConnStatus || !igConnStatus.connected) {
+    return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;text-align:center">
+      <div style="font-size:13px;color:var(--dim);margin-bottom:10px">Connecte ton compte Instagram pro pour voir tes stats, programmer des posts et répondre aux commentaires.</div>
+      <button onclick="igoConnect()" style="background:linear-gradient(45deg,#C13584,#E1306C,#F77737);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700;cursor:pointer">🔗 Connecter Instagram</button>
+      <div style="font-size:11px;color:var(--dim);margin:12px 0 6px">— ou colle un token généré depuis Graph API Explorer —</div>
+      <div style="display:flex;gap:6px">
+        <input id="ig-manual-token" type="text" placeholder="Token EAA…" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;background:var(--card2);color:inherit">
+        <button onclick="igoConnectWithToken()" style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:12px;cursor:pointer">Valider</button>
+      </div>
+      ${igLiveError?`<div style="color:var(--red);font-size:12px;margin-top:10px">${igEsc(igLiveError)}</div>`:''}
+    </div>`;
+  }
   let h = `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="font-size:13px;font-weight:700">🔗 ${igLiveStats&&igLiveStats.username?('@'+igEsc(igLiveStats.username)):'Instagram (Windsor.ai)'}</div>
-      <button onclick="igFetchLiveStats(true)" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">↻ Actualiser</button>
+      <div style="font-size:13px;font-weight:700">🔗 ${igConnStatus.username?('@'+igEsc(igConnStatus.username)):igEsc(igConnStatus.pageName||'Instagram connecté')}</div>
+      <div style="display:flex;gap:6px">
+        <button onclick="igFetchLiveStats(true)" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">↻</button>
+        <button onclick="igoDisconnect()" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">Déconnecter</button>
+      </div>
     </div>`;
   if (igLiveLoading) return h + `<div style="font-size:12px;color:var(--dim)">Chargement…</div></div>`;
   if (igLiveError) return h + `<div style="font-size:12px;color:var(--red)">${igEsc(igLiveError)}</div></div>`;
   if (!igLiveStats) return h + `</div>`;
 
   h += `<div style="font-size:20px;font-weight:800;margin-bottom:2px">${igLiveStats.followers!=null?igLiveStats.followers:'—'}</div>
-  <div style="font-size:11px;color:var(--dim);margin-bottom:10px">abonnés · ${igLiveStats.mediaCount||0} publications</div>`;
-
-  if (igLiveStats.last30) {
-    const l30 = igLiveStats.last30;
-    h += `<div style="display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--dim);margin-bottom:12px">
-      <span>+${l30.followersGained||0} abonnés (30j)</span>
-      <span>${l30.totalReach||0} portée</span>
-      <span>${l30.totalViews||0} vues</span>
-      <span>${l30.totalInteractions||0} interactions</span>
-    </div>`;
-  }
+  <div style="font-size:11px;color:var(--dim);margin-bottom:12px">abonnés · ${igLiveStats.mediaCount||0} publications</div>`;
 
   const media = igLiveStats.media||[];
-  const byViews = [...media].sort((a,b)=>(b.views||b.reach||0)-(a.views||a.reach||0)).slice(0,5);
+  const byReach = [...media].sort((a,b)=>(b.reach||0)-(a.reach||0)).slice(0,5);
   const byInteractions = [...media].sort((a,b)=>b.interactions-a.interactions).slice(0,5);
-  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:10px 0 2px">🔥 Les plus vues (30j)</div>` + (byViews.length?byViews.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
-  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:14px 0 2px">💬 Les plus engageantes (30j)</div>` + (byInteractions.length?byInteractions.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
+  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:10px 0 2px">🔥 Les plus vues</div>` + (byReach.length?byReach.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
+  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:14px 0 2px">💬 Les plus engageantes</div>` + (byInteractions.length?byInteractions.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
   h += `<div style="font-size:10px;color:var(--dim);margin-top:10px">Mis à jour ${new Date(igLiveStats.fetchedAt).toLocaleString('fr-FR')}</div>`;
   h += `</div>`;
   return h;
 }
 
-function igRenderStats(){
+async function igRenderStats(){
+  await igCheckStatus();
   igFetchLiveStats(false);
   let h = igConnectPanelHtml();
   const sorted=[...igStats].sort((a,b)=>b.date.localeCompare(a.date));
@@ -5447,6 +5518,113 @@ function igRenderStats(){
     </div>`;
   });
   document.getElementById('ig-content').innerHTML = h;
+}
+
+/* ───── Programmation de publications ───── */
+let igScheduleUploading = false;
+async function igoPickScheduleFile(input){
+  const file = input.files && input.files[0];
+  if (!file) return;
+  if (file.size > 4*1024*1024) { alert('Fichier trop lourd pour l’upload direct (max ~4 Mo). Pour une vidéo/reel, utilise plutôt un lien public (champ ci-dessous).'); input.value=''; return; }
+  igScheduleUploading = true;
+  const statusEl = document.getElementById('ig-sched-upload-status');
+  if (statusEl) statusEl.textContent = 'Envoi en cours…';
+  try {
+    const reader = new FileReader();
+    const dataUrl = await new Promise((resolve,reject)=>{ reader.onload=()=>resolve(reader.result); reader.onerror=reject; reader.readAsDataURL(file); });
+    const base64 = dataUrl.split(',')[1];
+    const r = await fetch('/api/ig-upload', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ filename: file.name, contentType: file.type, dataBase64: base64 }) });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    document.getElementById('ig-sched-url').value = d.url;
+    document.getElementById('ig-sched-isvideo').checked = file.type.startsWith('video');
+    if (statusEl) statusEl.textContent = '✓ Fichier envoyé';
+  } catch(e) {
+    if (statusEl) statusEl.textContent = 'Erreur : ' + (e && e.message ? e.message : e);
+  }
+  igScheduleUploading = false;
+}
+async function igoScheduleSubmit(){
+  const mediaUrl = document.getElementById('ig-sched-url').value.trim();
+  const isVideo = document.getElementById('ig-sched-isvideo').checked;
+  const target = document.getElementById('ig-sched-target').value;
+  const caption = document.getElementById('ig-sched-caption').value.trim();
+  const publishAt = document.getElementById('ig-sched-when').value;
+  if (!mediaUrl || !publishAt) { alert('Lien du média et date/heure sont obligatoires'); return; }
+  try {
+    const r = await fetch('/api/ig-schedule', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaUrl, isVideo, target, caption, publishAt: new Date(publishAt).toISOString() }) });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    document.getElementById('ig-sched-url').value='';
+    document.getElementById('ig-sched-caption').value='';
+    document.getElementById('ig-sched-when').value='';
+    igRenderProg();
+  } catch(e) {
+    alert('Erreur : ' + (e && e.message ? e.message : e));
+  }
+}
+async function igoScheduleDelete(id){
+  if (!confirm('Annuler cette publication programmée ?')) return;
+  await fetch('/api/ig-schedule?id=' + encodeURIComponent(id), { method: 'DELETE' });
+  igRenderProg();
+}
+const IG_SCHED_STATUT = {
+  pending: { label:'En attente', color:'var(--dim)' },
+  publishing: { label:'Publication en cours…', color:'var(--orange)' },
+  published: { label:'✅ Publié', color:'var(--green)' },
+  error: { label:'❌ Erreur', color:'var(--red)' },
+};
+async function igRenderProg(){
+  await igCheckStatus();
+  const container = document.getElementById('ig-content');
+  if (!igConnStatus || !igConnStatus.connected) {
+    container.innerHTML = igConnectPanelHtml();
+    return;
+  }
+  let h = `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:800;margin-bottom:10px">Programmer une publication</div>
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">Photo (upload direct, max ~4 Mo)</label>
+    <input type="file" accept="image/*,video/*" onchange="igoPickScheduleFile(this)" style="width:100%;font-size:12px;margin:4px 0 4px">
+    <div id="ig-sched-upload-status" style="font-size:11px;color:var(--dim);margin-bottom:8px"></div>
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">…ou lien public direct (obligatoire pour une vidéo/reel)</label>
+    <input id="ig-sched-url" type="text" placeholder="https://…" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;background:var(--card2);color:inherit;margin:4px 0 10px">
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:10px"><input id="ig-sched-isvideo" type="checkbox" style="width:16px;height:16px"> C'est une vidéo</label>
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">Destination</label>
+    <select id="ig-sched-target" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;background:var(--card2);color:inherit;margin:4px 0 10px">
+      <option value="feed">Publication (feed)</option>
+      <option value="reels">Reel</option>
+      <option value="story">Story</option>
+    </select>
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">Légende</label>
+    <textarea id="ig-sched-caption" rows="3" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;background:var(--card2);color:inherit;resize:none;margin:4px 0 10px"></textarea>
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">Date et heure de publication</label>
+    <input id="ig-sched-when" type="datetime-local" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:12px;background:var(--card2);color:inherit;margin:4px 0 12px">
+    <button onclick="igoScheduleSubmit()" style="width:100%;background:#C13584;color:#fff;border:none;border-radius:10px;padding:11px;font-size:13px;font-weight:700;cursor:pointer">Programmer</button>
+    <div style="font-size:10px;color:var(--dim);margin-top:8px">Un robot vérifie toutes les 15 min s'il y a quelque chose à publier — même si le CRM est fermé.</div>
+  </div>`;
+
+  try {
+    const r = await fetch('/api/ig-schedule');
+    const d = await r.json();
+    const items = (d.items||[]).sort((a,b)=>b.publishAt.localeCompare(a.publishAt));
+    h += `<div style="font-size:14px;font-weight:800;margin-bottom:8px">File d'attente</div>`;
+    if (!items.length) h += igEmptyHtml('📤','Rien de programmé pour l’instant');
+    items.forEach(it=>{
+      const st = IG_SCHED_STATUT[it.status] || IG_SCHED_STATUT.pending;
+      h += `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span style="font-size:12px;font-weight:700">${it.target==='story'?'Story':it.target==='reels'?'Reel':'Post'} · ${new Date(it.publishAt).toLocaleString('fr-FR')}</span>
+          ${it.status==='pending'?`<button onclick="igoScheduleDelete('${it.id}')" style="background:none;border:none;color:var(--red);font-size:16px;cursor:pointer">🗑</button>`:''}
+        </div>
+        <div style="font-size:11px;font-weight:700;color:${st.color};margin-bottom:4px">${st.label}</div>
+        ${it.caption?`<div style="font-size:12px;color:var(--dim)">${igEsc(it.caption.slice(0,80))}</div>`:''}
+        ${it.error?`<div style="font-size:11px;color:var(--red);margin-top:4px">${igEsc(it.error.slice(0,140))}</div>`:''}
+      </div>`;
+    });
+  } catch(e) {
+    h += `<div style="color:var(--red);font-size:12px">Erreur chargement file d'attente</div>`;
+  }
+  container.innerHTML = h;
 }
 
 function igOpenAddFromView(){
@@ -5539,6 +5717,7 @@ function igDeleteStat(id){
 ════════════════════════════════════ */
 (async function init() {
   load(); loadCompta(); loadProgObjectifs(); loadOrga(); loadInsta();
+  igHandleAuthRedirect();
   patchFiches(); render(); renderToday(); renderProspects();
 
   // Porte d'entrée : on essaie une reconnexion silencieuse (sans popup, marche si
