@@ -561,11 +561,12 @@ header{
 <div class="overlay" id="ig-overlay" onclick="if(event.target===this)igCloseModal()">
   <div class="modal" style="max-height:92vh;overflow-y:auto">
     <div class="modal-handle"></div>
+    <a href="https://canva.link/xoz48ua4wczhr9y" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;color:#00C4CC;background:rgba(0,196,204,0.14);padding:5px 10px;border-radius:8px;text-decoration:none;margin-bottom:10px">🎨 Voir mes templates Canva</a>
     <div id="ig-modal-title" style="font-size:17px;font-weight:800;margin-bottom:16px">Nouvelle idée</div>
 
     <label style="font-size:12px;font-weight:700;color:var(--dim)">Type</label>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px">
-      <button id="igm-type-post" onclick="igSetType('post')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🖼️ Post</button>
+      <button id="igm-type-carrousel" onclick="igSetType('carrousel')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🖼️ Carrousel</button>
       <button id="igm-type-reel" onclick="igSetType('reel')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🎬 Reel</button>
       <button id="igm-type-story" onclick="igSetType('story')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">⭐ Story</button>
     </div>
@@ -578,15 +579,11 @@ header{
       <button id="igm-stage-attirer" onclick="igSetStage('attirer')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🧲 Attirer</button>
       <button id="igm-stage-convaincre" onclick="igSetStage('convaincre')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🤝 Convaincre</button>
       <button id="igm-stage-vendre" onclick="igSetStage('vendre')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">💰 Vendre</button>
-      <button id="igm-stage-suivre" onclick="igSetStage('suivre')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🔁 Suivre</button>
     </div>
 
-    <label style="font-size:12px;font-weight:700;color:var(--dim)">Statut</label>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:4px 0 12px">
-      <button id="igm-statut-idee" onclick="igSetStatut('idee')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">💡 Idée</button>
-      <button id="igm-statut-pret" onclick="igSetStatut('pret')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">🎞️ Prêt</button>
-      <button id="igm-statut-publie" onclick="igSetStatut('publie')" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);font-size:12px;cursor:pointer;background:var(--card2)">✅ Publié</button>
-    </div>
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:700;margin:4px 0 12px;cursor:pointer">
+      <input id="igm-done" type="checkbox" style="width:18px;height:18px;accent-color:#C13584"> Publié / fait
+    </label>
 
     <label style="font-size:12px;font-weight:700;color:var(--dim)">Date prévue (optionnel)</label>
     <input id="igm-date" type="date" style="width:100%;border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:14px;background:var(--card2);color:inherit;margin:4px 0 12px">
@@ -5182,10 +5179,10 @@ let igIdees = [];
 let igStats = [];
 let igView = 'idees';
 let igFilterStage = 'tous';
-let igCurrentType = 'post', igCurrentStage = 'attirer', igCurrentStatut = 'idee';
+let igCurrentType = 'carrousel', igCurrentStage = 'attirer';
 
 const IG_TYPE_META = {
-  post:  { icon:'🖼️', label:'Post' },
+  carrousel: { icon:'🖼️', label:'Carrousel' },
   reel:  { icon:'🎬', label:'Reel' },
   story: { icon:'⭐', label:'Story' },
 };
@@ -5193,14 +5190,7 @@ const IG_STAGE_META = {
   attirer:    { icon:'🧲', label:'Attirer',    color:'var(--orange)' },
   convaincre: { icon:'🤝', label:'Convaincre', color:'#3578C4' },
   vendre:     { icon:'💰', label:'Vendre',     color:'var(--red)' },
-  suivre:     { icon:'🔁', label:'Suivre',     color:'var(--green)' },
 };
-const IG_STATUT_META = {
-  idee:   { icon:'💡', label:'Idée',   color:'var(--dim)' },
-  pret:   { icon:'🎞️', label:'Prêt',   color:'var(--orange)' },
-  publie: { icon:'✅', label:'Publié', color:'var(--green)' },
-};
-
 function igEsc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
 function loadInsta(){
@@ -5225,12 +5215,12 @@ function igPurgeSeeds(){
 // [jour (0=lundi..6=dimanche), type, stage, titre]
 const IG_POST_TEMPLATE = [
   [0,'reel','attirer','Réaction (vidéo)'],
-  [0,'reel','convaincre','Démo de l’application'],
+  [0,'reel','convaincre','Appel client'],
   [1,'reel','attirer','Conseil face caméra'],
-  [1,'post','convaincre','Cas client'],
+  [1,'carrousel','convaincre','Cas client'],
   [2,'reel','attirer','Cassage de mythe'],
   [2,'reel','convaincre','Extrait d’appel client'],
-  [3,'post','attirer','Réaction en carrousel'],
+  [3,'carrousel','attirer','Réaction en carrousel'],
   [4,'reel','attirer','Cassage de mythe'],
   [4,'reel','vendre','Vente — mon accompagnement'],
   [5,'reel','attirer','Conseil'],
@@ -5258,10 +5248,10 @@ function igTemplateItemsForRange(startDate, days){
     const dow = (d.getDay() + 6) % 7; // 0 = lundi
     const dateStr = igDateStr(d);
     IG_POST_TEMPLATE.filter(t=>t[0]===dow).forEach((t, idx) => {
-      items.push({ id:'tmpl_post_'+dateStr+'_'+idx, titre:t[3], date:dateStr, type:t[1], stage:t[2], statut:'idee', template:true });
+      items.push({ id:'tmpl_post_'+dateStr+'_'+idx, titre:t[3], date:dateStr, type:t[1], stage:t[2], template:true });
     });
     IG_STORY_TEMPLATE.filter(t=>t[0]===dow).forEach((t, idx) => {
-      items.push({ id:'tmpl_story_'+dateStr+'_'+idx, titre:t[1], date:dateStr, type:'story', stage:'suivre', statut:'idee', note:t[2]||'', template:true });
+      items.push({ id:'tmpl_story_'+dateStr+'_'+idx, titre:t[1], date:dateStr, type:'story', note:t[2]||'', template:true });
     });
   }
   return items;
@@ -5290,7 +5280,7 @@ function igRenderContent(){
 
 // Petit menu déroulant pour trier par objectif (remplace l'ancienne barre de filtres).
 function igFilterSelectHtml(){
-  const opts=[['tous','Tous'],['attirer','🧲 Attirer'],['convaincre','🤝 Convaincre'],['vendre','💰 Vendre'],['suivre','🔁 Suivre']];
+  const opts=[['tous','Tous'],['attirer','🧲 Attirer'],['convaincre','🤝 Convaincre'],['vendre','💰 Vendre']];
   return `<select onchange="igSetFilterStage(this.value)" style="font-size:12px;padding:6px 8px;border-radius:8px;border:1px solid var(--border);background:var(--card2);color:inherit">
     ${opts.map(([k,label])=>`<option value="${k}" ${igFilterStage===k?'selected':''}>${label}</option>`).join('')}
   </select>`;
@@ -5299,21 +5289,25 @@ function igSetFilterStage(s){ igFilterStage=s; igRenderContent(); }
 
 function igEmptyHtml(icon, label){ return `<div style="text-align:center;padding:60px 0;color:var(--dim)">${label}<br><span style="font-size:24px">${icon}</span></div>`; }
 
+function igToggleDone(id){
+  const it = igIdees.find(x=>x.id===id);
+  if(!it) return;
+  it.done = !it.done;
+  saveInsta(); igRenderContent();
+}
 function igCardHtml(it){
-  const tm = IG_TYPE_META[it.type] || IG_TYPE_META.post;
-  const sm = IG_STAGE_META[it.stage] || IG_STAGE_META.attirer;
-  const um = IG_STATUT_META[it.statut] || IG_STATUT_META.idee;
+  const tm = IG_TYPE_META[it.type] || IG_TYPE_META.carrousel;
+  const sm = it.type==='story' ? { icon:'⭐', label:'Story', color:'var(--dim)' } : (IG_STAGE_META[it.stage] || IG_STAGE_META.attirer);
   return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:8px">
     <div style="display:flex;align-items:flex-start;gap:8px">
+      <input type="checkbox" ${it.done?'checked':''} ${it.template?'disabled title="Note manuelle uniquement"':`onchange="igToggleDone('${it.id}')"`} style="margin-top:2px;width:18px;height:18px;flex-shrink:0;accent-color:#C13584">
       <div style="flex:1;min-width:0">
         <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px;flex-wrap:wrap">
           <span style="font-size:13px">${tm.icon}</span>
-          <span style="font-size:14px;font-weight:700">${igEsc(it.titre)}</span>
+          <span style="font-size:14px;font-weight:700;${it.done?'text-decoration:line-through;color:var(--dim)':''}">${igEsc(it.titre)}</span>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           <span style="font-size:11px;font-weight:700;color:${sm.color}">${sm.icon} ${sm.label}</span>
-          <span style="font-size:11px;color:var(--dim)">·</span>
-          <span style="font-size:11px;font-weight:700;color:${um.color}">${um.icon} ${um.label}</span>
           ${it.date?`<span style="font-size:11px;color:var(--dim)">· 📅 ${fmtDateShort(it.date)}</span>`:''}
         </div>
         ${it.note?`<div style="font-size:12px;color:var(--dim);margin-top:6px">${igEsc(it.note)}</div>`:''}
@@ -5381,7 +5375,7 @@ function igRenderStats(){
 }
 
 function igOpenAddFromView(){
-  igOpenModal(null, igView==='stories' ? 'story' : 'post');
+  igOpenModal(null, igView==='stories' ? 'story' : 'carrousel');
 }
 function igOpenModal(id, presetType){
   const it = id ? igIdees.find(x=>x.id===id) : null;
@@ -5389,31 +5383,24 @@ function igOpenModal(id, presetType){
   document.getElementById('igm-titre').value = it ? it.titre : '';
   document.getElementById('igm-date').value = it ? (it.date||'') : '';
   document.getElementById('igm-note').value = it ? (it.note||'') : '';
+  document.getElementById('igm-done').checked = it ? !!it.done : false;
   document.getElementById('ig-modal-title').textContent = it ? 'Modifier' : 'Nouvelle idée';
   document.getElementById('igm-delete-btn').style.display = it ? '' : 'none';
-  igSetType(it ? it.type : (presetType||'post'));
+  igSetType(it ? it.type : (presetType||'carrousel'));
   igSetStage(it ? (it.stage||'attirer') : 'attirer');
-  igSetStatut(it ? (it.statut||'idee') : 'idee');
   document.getElementById('ig-overlay').classList.add('open');
 }
 function igSetType(t){
   igCurrentType = t;
-  ['post','reel','story'].forEach(k=>{
+  ['carrousel','reel','story'].forEach(k=>{
     const btn = document.getElementById('igm-type-'+k);
     if(btn){ btn.style.background = k===t?'#C13584':'var(--card2)'; btn.style.color = k===t?'#fff':'inherit'; btn.style.borderColor = k===t?'#C13584':'var(--border)'; }
   });
 }
 function igSetStage(s){
   igCurrentStage = s;
-  ['attirer','convaincre','vendre','suivre'].forEach(k=>{
+  ['attirer','convaincre','vendre'].forEach(k=>{
     const btn = document.getElementById('igm-stage-'+k);
-    if(btn){ btn.style.background = k===s?'#C13584':'var(--card2)'; btn.style.color = k===s?'#fff':'inherit'; btn.style.borderColor = k===s?'#C13584':'var(--border)'; }
-  });
-}
-function igSetStatut(s){
-  igCurrentStatut = s;
-  ['idee','pret','publie'].forEach(k=>{
-    const btn = document.getElementById('igm-statut-'+k);
     if(btn){ btn.style.background = k===s?'#C13584':'var(--card2)'; btn.style.color = k===s?'#fff':'inherit'; btn.style.borderColor = k===s?'#C13584':'var(--border)'; }
   });
 }
@@ -5424,11 +5411,12 @@ function igSave(){
   const id = document.getElementById('igm-id').value;
   const date = document.getElementById('igm-date').value;
   const note = document.getElementById('igm-note').value.trim();
+  const done = document.getElementById('igm-done').checked;
   if(id){
     const it = igIdees.find(x=>x.id===id);
-    if(it){ it.titre=titre; it.type=igCurrentType; it.stage=igCurrentStage; it.statut=igCurrentStatut; it.date=date; it.note=note; }
+    if(it){ it.titre=titre; it.type=igCurrentType; it.stage=igCurrentStage; it.date=date; it.note=note; it.done=done; }
   } else {
-    igIdees.push({ id: uid(), titre, type: igCurrentType, stage: igCurrentStage, statut: igCurrentStatut, date, note, createdAt: Date.now() });
+    igIdees.push({ id: uid(), titre, type: igCurrentType, stage: igCurrentStage, date, note, done, createdAt: Date.now() });
   }
   saveInsta(); igCloseModal(); igRenderContent();
 }
