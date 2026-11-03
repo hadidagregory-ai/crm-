@@ -1,4 +1,4 @@
-const { GRAPH, ensureFreshToken, getScheduled, saveScheduled, resolveMediaUrl } = require('./_lib');
+const { GRAPH, ensureFreshToken, getScheduled, saveScheduled, resolveMediaUrl, recordStatsSnapshot } = require('./_lib');
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
@@ -39,13 +39,22 @@ async function publishContainer(igAccountId, token, creationId) {
 }
 
 module.exports = async function handler(req, res) {
+  const conn = await ensureFreshToken();
+
+  if (conn) {
+    try {
+      const accRes = await fetch(`${GRAPH}/${conn.igAccountId}?fields=followers_count,media_count&access_token=${conn.token}`);
+      const accData = await accRes.json();
+      if (accData.followers_count != null) await recordStatsSnapshot(accData.followers_count, accData.media_count);
+    } catch (e) {}
+  }
+
   const list = await getScheduled();
   const now = Date.now();
   const due = list.filter(x => x.status === 'pending' && new Date(x.publishAt).getTime() <= now);
 
   if (!due.length) { res.status(200).json({ processed: 0 }); return; }
 
-  const conn = await ensureFreshToken();
   if (!conn) {
     due.forEach(x => { x.status = 'error'; x.error = 'not_connected'; });
     await saveScheduled(list);

@@ -5481,19 +5481,107 @@ function igConnectPanelHtml(){
   <div style="font-size:11px;color:var(--dim);margin-bottom:12px">abonnés · ${igLiveStats.mediaCount||0} publications</div>`;
 
   const media = igLiveStats.media||[];
-  const byReach = [...media].sort((a,b)=>(b.reach||0)-(a.reach||0)).slice(0,5);
-  const byInteractions = [...media].sort((a,b)=>b.interactions-a.interactions).slice(0,5);
-  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:10px 0 2px">🔥 Les plus vues</div>` + (byReach.length?byReach.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
-  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:14px 0 2px">💬 Les plus engageantes</div>` + (byInteractions.length?byInteractions.map(igMediaRowHtml).join(''):`<div style="font-size:12px;color:var(--dim)">—</div>`);
+  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:10px 0 6px">📊 Tous les posts (clique une colonne pour trier)</div>` + igTopPostsTableHtml(media);
   h += `<div style="font-size:10px;color:var(--dim);margin-top:10px">Mis à jour ${new Date(igLiveStats.fetchedAt).toLocaleString('fr-FR')}</div>`;
   h += `</div>`;
   return h;
 }
 
+let igTopSort = 'reach';
+function igSetTopSort(key){ igTopSort = key; igRenderContent(); }
+function igTopPostsTableHtml(media){
+  if (!media.length) return `<div style="font-size:12px;color:var(--dim)">—</div>`;
+  const cols = [
+    {k:'reach', l:'Portée'}, {k:'likes', l:'Likes'}, {k:'comments', l:'Comm.'},
+    {k:'saved', l:'Enreg.'}, {k:'shares', l:'Partages'}, {k:'interactions', l:'Interact.'},
+  ];
+  const sorted = [...media].sort((a,b)=>(b[igTopSort]||0)-(a[igTopSort]||0)).slice(0,15);
+  const head = cols.map(c=>`<th onclick="igSetTopSort('${c.k}')" style="cursor:pointer;font-size:10px;color:${igTopSort===c.k?'#C13584':'var(--dim)'};padding:4px 6px;text-align:right;white-space:nowrap">${c.l}${igTopSort===c.k?' ▾':''}</th>`).join('');
+  const rows = sorted.map(m=>`<tr style="border-top:1px solid var(--border)">
+    <td style="padding:4px 6px;font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${m.permalink}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${igEsc((m.caption||'(sans légende)').slice(0,40))}</a></td>
+    ${cols.map(c=>`<td style="padding:4px 6px;font-size:11px;text-align:right">${m[c.k]||0}</td>`).join('')}
+  </tr>`).join('');
+  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
+    <thead><tr><th style="font-size:10px;color:var(--dim);text-align:left;padding:4px 6px">Post</th>${head}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
+}
+
+let igHistory = null, igHistoryLoading = false;
+async function igFetchHistory(force){
+  if (igHistoryLoading) return;
+  if (!igConnStatus || !igConnStatus.connected) return;
+  if (!force && igHistory && (Date.now()-igHistory.fetchedAt)<15*60*1000) return;
+  igHistoryLoading = true; igRenderContent();
+  try {
+    const r = await fetch('/api/ig-stats-history');
+    const d = await r.json();
+    igHistory = { history: d.history||[], fetchedAt: Date.now() };
+  } catch(e) {}
+  igHistoryLoading = false; igRenderContent();
+}
+function igSparklineSvg(points){
+  const w=600,h=110,pad=8;
+  if (!points.length) return `<div style="font-size:12px;color:var(--dim)">Pas encore assez de données</div>`;
+  const min=Math.min(...points), max=Math.max(...points), range=(max-min)||1;
+  const stepX = points.length>1 ? (w-2*pad)/(points.length-1) : 0;
+  const coords = points.map((v,i)=>[pad+i*stepX, h-pad-((v-min)/range)*(h-2*pad)]);
+  const path = coords.map((c,i)=>(i===0?'M':'L')+c[0].toFixed(1)+','+c[1].toFixed(1)).join(' ');
+  const last = coords[coords.length-1];
+  return `<svg viewBox="0 0 ${w} ${h}" style="width:100%;height:${h}px;display:block">
+    <path d="${path}" fill="none" stroke="#C13584" stroke-width="2"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="3" fill="#C13584"/>
+  </svg>`;
+}
+function igMonthLabel(m){
+  const [y,mo] = m.split('-');
+  const names=['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
+  return names[parseInt(mo,10)-1] + ' ' + y;
+}
+function igEvolutionHtml(){
+  if (!igConnStatus || !igConnStatus.connected) return '';
+  if (igHistoryLoading) return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;color:var(--dim)">Chargement de l'évolution…</div>`;
+  const history = (igHistory && igHistory.history) || [];
+  if (!history.length) return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px;font-size:12px;color:var(--dim)">📈 L'évolution se construit automatiquement jour après jour à partir d'aujourd'hui — reviens dans quelques jours pour voir la courbe.</div>`;
+  const sorted = [...history].sort((a,b)=>a.date.localeCompare(b.date));
+  const points = sorted.map(h=>h.followers||0);
+  const first = sorted[0], last = sorted[sorted.length-1];
+  const totalDelta = (last.followers||0) - (first.followers||0);
+  const now = Date.now();
+  const lastWeek = sorted.filter(h => now - new Date(h.date).getTime() <= 7*86400000);
+  const weekDelta = lastWeek.length>1 ? (lastWeek[lastWeek.length-1].followers - lastWeek[0].followers) : null;
+
+  const byMonth = {};
+  sorted.forEach(h=>{ byMonth[h.date.slice(0,7)] = h.followers; });
+  const months = Object.keys(byMonth).sort().slice(-6);
+  let monthlyRows = '';
+  months.forEach((m,i)=>{
+    const prev = months[i-1];
+    const delta = prev!=null ? byMonth[m]-byMonth[prev] : null;
+    monthlyRows += `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-top:1px solid var(--border)">
+      <span>${igMonthLabel(m)}</span>
+      <span><b>${byMonth[m]}</b>${delta!=null?` <span style="color:${delta>=0?'var(--green)':'var(--red)'}">(${delta>=0?'+':''}${delta})</span>`:''}</span>
+    </div>`;
+  });
+
+  return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:800;margin-bottom:8px">📈 Évolution des abonnés</div>
+    ${igSparklineSvg(points)}
+    <div style="display:flex;gap:14px;margin:10px 0;font-size:12px">
+      ${weekDelta!=null?`<span>7 jours : <b style="color:${weekDelta>=0?'var(--green)':'var(--red)'}">${weekDelta>=0?'+':''}${weekDelta}</b></span>`:''}
+      <span>Depuis le suivi : <b style="color:${totalDelta>=0?'var(--green)':'var(--red)'}">${totalDelta>=0?'+':''}${totalDelta}</b></span>
+    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--dim);margin-top:10px">Par mois</div>
+    ${monthlyRows || '<div style="font-size:12px;color:var(--dim);padding:4px 0">Un seul mois enregistré pour l’instant</div>'}
+  </div>`;
+}
+
 async function igRenderStats(){
   await igCheckStatus();
   igFetchLiveStats(false);
+  igFetchHistory(false);
   let h = igConnectPanelHtml();
+  h += igEvolutionHtml();
   const sorted=[...igStats].sort((a,b)=>b.date.localeCompare(a.date));
   h += `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
     <div style="font-size:14px;font-weight:800">Relevé manuel</div>

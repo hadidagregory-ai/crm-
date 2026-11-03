@@ -43,6 +43,21 @@ function saveScheduled(data) { return writeJson('data/ig-scheduled.json', data);
 function getReplyLog() { return readJson('data/ig-reply-log.json', {}); }
 function saveReplyLog(data) { return writeJson('data/ig-reply-log.json', data); }
 
+function getStatsHistory() { return readJson('data/ig-stats-history.json', []); }
+async function recordStatsSnapshot(followers, mediaCount) {
+  const history = await getStatsHistory();
+  const today = new Date().toISOString().slice(0, 10);
+  if (history.length && history[history.length - 1].date === today) {
+    history[history.length - 1].followers = followers;
+    history[history.length - 1].mediaCount = mediaCount;
+  } else {
+    history.push({ date: today, followers, mediaCount });
+  }
+  const trimmed = history.slice(-400);
+  await writeJson('data/ig-stats-history.json', trimmed);
+  return trimmed;
+}
+
 function appSecret() { return process.env.IG_APP_SECRET; }
 
 async function exchangeForLongLivedToken(shortLivedToken) {
@@ -83,4 +98,5 @@ module.exports = {
   exchangeForLongLivedToken, renewUserToken,
   readJson, writeJson,
   presignBlobGetUrl, resolveMediaUrl,
+  getStatsHistory, recordStatsSnapshot,
 };

@@ -1,4 +1,4 @@
-const { GRAPH, ensureFreshToken } = require('./_lib');
+const { GRAPH, ensureFreshToken, recordStatsSnapshot } = require('./_lib');
 
 module.exports = async function handler(req, res) {
   const conn = await ensureFreshToken();
@@ -10,6 +10,7 @@ module.exports = async function handler(req, res) {
     const accRes = await fetch(`${GRAPH}/${acc}?fields=followers_count,media_count&access_token=${token}`);
     const accData = await accRes.json();
     if (accData.error) throw new Error(accData.error.message);
+    recordStatsSnapshot(accData.followers_count, accData.media_count).catch(() => {});
 
     const mediaRes = await fetch(`${GRAPH}/${acc}/media?fields=id,caption,media_type,media_product_type,permalink,thumbnail_url,media_url,timestamp,like_count,comments_count&limit=25&access_token=${token}`);
     const mediaData = await mediaRes.json();
