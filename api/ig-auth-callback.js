@@ -34,6 +34,7 @@ module.exports = async function handler(req, res) {
     const pagesRes = await fetch(`${GRAPH}/me/accounts?access_token=${userToken}`);
     const pagesData = await pagesRes.json();
     const pages = pagesData.data || [];
+    console.log('ig-auth-callback diag', JSON.stringify({ pagesCount: pages.length, pagesError: pagesData.error || null }));
     if (!pages.length) return fail('no_facebook_page_found');
 
     let igAccountId = null, pageName = null;
