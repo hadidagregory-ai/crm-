@@ -5443,15 +5443,6 @@ async function igoReplyToCommenters(mediaId){
     alert('Erreur : ' + (e && e.message ? e.message : e));
   }
 }
-function igMediaRowHtml(m){
-  return `<div style="padding:6px 0;border-top:1px solid var(--border)">
-    <a href="${m.permalink}" target="_blank" rel="noopener" style="display:block;text-decoration:none;color:inherit">
-      <div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${igEsc((m.caption||'(sans légende)').slice(0,60))}</div>
-      <div style="font-size:11px;color:var(--dim)">👁️ ${m.reach||0} · ❤️ ${m.likes} · 💬 ${m.comments}${m.avgWatch!=null?` · ⏱️ ${Math.round(m.avgWatch)}s moy.`:''}</div>
-    </a>
-    <button onclick="igoReplyToCommenters('${m.id}')" style="margin-top:4px;background:none;border:1px solid var(--border);border-radius:8px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--dim)">✉️ Répondre aux commentaires</button>
-  </div>`;
-}
 function igConnectPanelHtml(){
   if (!igConnStatus || !igConnStatus.connected) {
     return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:14px;text-align:center">
@@ -5481,30 +5472,59 @@ function igConnectPanelHtml(){
   <div style="font-size:11px;color:var(--dim);margin-bottom:12px">abonnés · ${igLiveStats.mediaCount||0} publications</div>`;
 
   const media = igLiveStats.media||[];
-  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:10px 0 6px">📊 Tous les posts (clique une colonne pour trier)</div>` + igTopPostsTableHtml(media);
+  h += `<div style="font-size:12px;font-weight:700;color:var(--dim);margin:10px 0 6px">📊 Post par post — choisis ce que tu veux regarder</div>`;
+  h += igMetricPillsHtml();
+  h += igPostListHtml(media);
   h += `<div style="font-size:10px;color:var(--dim);margin-top:10px">Mis à jour ${new Date(igLiveStats.fetchedAt).toLocaleString('fr-FR')}</div>`;
   h += `</div>`;
   return h;
 }
 
-let igTopSort = 'reach';
-function igSetTopSort(key){ igTopSort = key; igRenderContent(); }
-function igTopPostsTableHtml(media){
+let igMetricFilter = 'reach';
+let igExpandedPostId = null;
+const IG_METRICS = [
+  {k:'reach', l:'👁️ Vues'},
+  {k:'likes', l:'❤️ Likes'},
+  {k:'comments', l:'💬 Commentaires'},
+  {k:'saved', l:'🔖 Enregistrements'},
+  {k:'shares', l:'↗️ Partages'},
+];
+function igSetMetricFilter(k){ igMetricFilter = k; igRenderContent(); }
+function igToggleExpand(id){ igExpandedPostId = (igExpandedPostId===id) ? null : id; igRenderContent(); }
+function igMetricPillsHtml(){
+  return `<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">` +
+    IG_METRICS.map(m=>`<button onclick="igSetMetricFilter('${m.k}')" style="border:1px solid ${igMetricFilter===m.k?'#C13584':'var(--border)'};background:${igMetricFilter===m.k?'#C13584':'var(--card2)'};color:${igMetricFilter===m.k?'#fff':'inherit'};border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;font-weight:${igMetricFilter===m.k?'700':'400'}">${m.l}</button>`).join('') +
+    `</div>`;
+}
+function igPostListHtml(media){
   if (!media.length) return `<div style="font-size:12px;color:var(--dim)">—</div>`;
-  const cols = [
-    {k:'reach', l:'Portée'}, {k:'likes', l:'Likes'}, {k:'comments', l:'Comm.'},
-    {k:'saved', l:'Enreg.'}, {k:'shares', l:'Partages'}, {k:'interactions', l:'Interact.'},
-  ];
-  const sorted = [...media].sort((a,b)=>(b[igTopSort]||0)-(a[igTopSort]||0)).slice(0,15);
-  const head = cols.map(c=>`<th onclick="igSetTopSort('${c.k}')" style="cursor:pointer;font-size:10px;color:${igTopSort===c.k?'#C13584':'var(--dim)'};padding:4px 6px;text-align:right;white-space:nowrap">${c.l}${igTopSort===c.k?' ▾':''}</th>`).join('');
-  const rows = sorted.map(m=>`<tr style="border-top:1px solid var(--border)">
-    <td style="padding:4px 6px;font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><a href="${m.permalink}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none">${igEsc((m.caption||'(sans légende)').slice(0,40))}</a></td>
-    ${cols.map(c=>`<td style="padding:4px 6px;font-size:11px;text-align:right">${m[c.k]||0}</td>`).join('')}
-  </tr>`).join('');
-  return `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">
-    <thead><tr><th style="font-size:10px;color:var(--dim);text-align:left;padding:4px 6px">Post</th>${head}</tr></thead>
-    <tbody>${rows}</tbody>
-  </table></div>`;
+  const sorted = [...media].sort((a,b)=>(b[igMetricFilter]||0)-(a[igMetricFilter]||0));
+  return sorted.map(m=>{
+    const expanded = igExpandedPostId===m.id;
+    let row = `<div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="igToggleExpand('${m.id}')">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
+        <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${igEsc((m.caption||'(sans légende)').slice(0,50))}</div>
+        <div style="font-size:16px;font-weight:800;color:#C13584;white-space:nowrap">${m[igMetricFilter]||0}</div>
+      </div>
+      <div style="font-size:10px;color:var(--dim);margin-top:2px">${new Date(m.timestamp).toLocaleDateString('fr-FR')}</div>`;
+    if (expanded) {
+      row += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+        <span>👁️ ${m.reach||0} vues</span>
+        <span>❤️ ${m.likes||0} likes</span>
+        <span>💬 ${m.comments||0} commentaires</span>
+        <span>🔖 ${m.saved||0} enregistrements</span>
+        <span>↗️ ${m.shares||0} partages</span>
+        <span>⚡ ${m.interactions||0} interactions</span>
+        ${m.avgWatch!=null?`<span>⏱️ ${Math.round(m.avgWatch)}s de visionnage moyen</span>`:''}
+      </div>
+      <div style="margin-top:8px;display:flex;gap:8px">
+        <a href="${m.permalink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:11px;color:var(--dim);text-decoration:underline">Voir sur Instagram</a>
+        <button onclick="event.stopPropagation();igoReplyToCommenters('${m.id}')" style="background:none;border:1px solid var(--border);border-radius:8px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--dim)">✉️ Répondre aux commentaires</button>
+      </div>`;
+    }
+    row += `</div>`;
+    return row;
+  }).join('');
 }
 
 let igHistory = null, igHistoryLoading = false;
@@ -5532,6 +5552,12 @@ function igSparklineSvg(points){
     <path d="${path}" fill="none" stroke="#C13584" stroke-width="2"/>
     <circle cx="${last[0]}" cy="${last[1]}" r="3" fill="#C13584"/>
   </svg>`;
+}
+function igWeekStart(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const day = (d.getDay()+6)%7;
+  d.setDate(d.getDate()-day);
+  return d.toISOString().slice(0,10);
 }
 function igMonthLabel(m){
   const [y,mo] = m.split('-');
@@ -5564,6 +5590,20 @@ function igEvolutionHtml(){
     </div>`;
   });
 
+  const byWeek = {};
+  sorted.forEach(h=>{ byWeek[igWeekStart(h.date)] = h.followers; });
+  const weeks = Object.keys(byWeek).sort().slice(-8);
+  let weeklyRows = '';
+  weeks.forEach((w,i)=>{
+    const prev = weeks[i-1];
+    const delta = prev!=null ? byWeek[w]-byWeek[prev] : null;
+    const label = 'Sem. du ' + new Date(w+'T00:00:00').toLocaleDateString('fr-FR',{day:'2-digit',month:'short'});
+    weeklyRows += `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-top:1px solid var(--border)">
+      <span>${label}</span>
+      <span><b>${byWeek[w]}</b>${delta!=null?` <span style="color:${delta>=0?'var(--green)':'var(--red)'}">(${delta>=0?'+':''}${delta})</span>`:''}</span>
+    </div>`;
+  });
+
   return `<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:14px">
     <div style="font-size:14px;font-weight:800;margin-bottom:8px">📈 Évolution des abonnés</div>
     ${igSparklineSvg(points)}
@@ -5571,6 +5611,8 @@ function igEvolutionHtml(){
       ${weekDelta!=null?`<span>7 jours : <b style="color:${weekDelta>=0?'var(--green)':'var(--red)'}">${weekDelta>=0?'+':''}${weekDelta}</b></span>`:''}
       <span>Depuis le suivi : <b style="color:${totalDelta>=0?'var(--green)':'var(--red)'}">${totalDelta>=0?'+':''}${totalDelta}</b></span>
     </div>
+    <div style="font-size:12px;font-weight:700;color:var(--dim);margin-top:10px">Par semaine</div>
+    ${weeklyRows || '<div style="font-size:12px;color:var(--dim);padding:4px 0">Une seule semaine enregistrée pour l’instant</div>'}
     <div style="font-size:12px;font-weight:700;color:var(--dim);margin-top:10px">Par mois</div>
     ${monthlyRows || '<div style="font-size:12px;color:var(--dim);padding:4px 0">Un seul mois enregistré pour l’instant</div>'}
   </div>`;
