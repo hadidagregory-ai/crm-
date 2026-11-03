@@ -5522,7 +5522,7 @@ async function igoToggleAutoReply(mediaId){
 }
 async function igoEnableWebhook(){
   try {
-    const r = await fetch('/api/ig-webhook-subscribe', { method:'POST' });
+    const r = await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ action:'subscribe' }) });
     const d = await r.json();
     if (d.error) throw new Error(d.error);
     alert('Notifications Instagram activées ✓');
