@@ -5576,6 +5576,7 @@ const IG_SCHED_STATUT = {
 };
 async function igRenderProg(){
   await igCheckStatus();
+  fetch('/api/ig-cron-publish').catch(()=>{}); // vérif immédiate en plus du robot quotidien
   const container = document.getElementById('ig-content');
   if (!igConnStatus || !igConnStatus.connected) {
     container.innerHTML = igConnectPanelHtml();

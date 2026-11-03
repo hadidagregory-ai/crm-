@@ -3,6 +3,6 @@
     { "source": "/", "destination": "/crm-clients.html" }
   ],
   "crons": [
-    { "path": "/api/ig-cron-publish", "schedule": "*/15 * * * *" }
+    { "path": "/api/ig-cron-publish", "schedule": "0 9 * * *" }
   ]
 }
