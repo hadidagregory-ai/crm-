@@ -20,7 +20,7 @@ module.exports = async function handler(req, res) {
     const pages = pagesData.data || [];
     if (!pages.length) { res.status(400).json({ error: 'no_facebook_page_found', detail: pagesData }); return; }
 
-    let igAccountId = null, pageName = null;
+    let igAccountId = null, pageName = null, pageId = null;
     const pageErrors = [];
     for (const p of pages) {
       const igRes = await fetch(`${GRAPH}/${p.id}?fields=instagram_business_account&access_token=${userToken}`);
@@ -29,6 +29,7 @@ module.exports = async function handler(req, res) {
       if (igData.instagram_business_account && igData.instagram_business_account.id) {
         igAccountId = igData.instagram_business_account.id;
         pageName = p.name;
+        pageId = p.id;
         break;
       }
     }
@@ -45,7 +46,7 @@ module.exports = async function handler(req, res) {
       username = uData.username || '';
     } catch (e) {}
 
-    await saveConnect({ token: userToken, igAccountId, pageName, username, expiresAt: Date.now() + expiresIn * 1000 });
+    await saveConnect({ token: userToken, igAccountId, pageId, pageName, username, expiresAt: Date.now() + expiresIn * 1000 });
     res.status(200).json({ ok: true, username, pageName });
   } catch (e) {
     res.status(500).json({ error: String(e && e.message || e) });

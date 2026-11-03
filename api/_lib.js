@@ -43,6 +43,27 @@ function saveScheduled(data) { return writeJson('data/ig-scheduled.json', data);
 function getReplyLog() { return readJson('data/ig-reply-log.json', {}); }
 function saveReplyLog(data) { return writeJson('data/ig-reply-log.json', data); }
 
+function getAutoReplyRules() { return readJson('data/ig-auto-reply.json', {}); }
+function saveAutoReplyRules(data) { return writeJson('data/ig-auto-reply.json', data); }
+
+async function ensurePageId(conn) {
+  if (conn.pageId) return conn.pageId;
+  try {
+    const pagesRes = await fetch(`${GRAPH}/me/accounts?access_token=${conn.token}`);
+    const pagesData = await pagesRes.json();
+    for (const p of (pagesData.data || [])) {
+      const igRes = await fetch(`${GRAPH}/${p.id}?fields=instagram_business_account&access_token=${conn.token}`);
+      const igData = await igRes.json();
+      if (igData.instagram_business_account && igData.instagram_business_account.id === conn.igAccountId) {
+        conn.pageId = p.id;
+        await saveConnect(conn);
+        return p.id;
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 function getStatsHistory() { return readJson('data/ig-stats-history.json', []); }
 async function recordStatsSnapshot(followers, mediaCount) {
   const history = await getStatsHistory();
@@ -99,4 +120,5 @@ module.exports = {
   readJson, writeJson,
   presignBlobGetUrl, resolveMediaUrl,
   getStatsHistory, recordStatsSnapshot,
+  getAutoReplyRules, saveAutoReplyRules, ensurePageId,
 };

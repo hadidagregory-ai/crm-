@@ -42,7 +42,7 @@ module.exports = async function handler(req, res) {
     console.log('ig-auth-callback diag', JSON.stringify({ pagesCount: pages.length, pagesError: pagesData.error || null, granted, declined }));
     if (!pages.length) return fail('no_facebook_page_found');
 
-    let igAccountId = null, pageName = null;
+    let igAccountId = null, pageName = null, pageId = null;
     const pageErrors = [];
     for (const p of pages) {
       const igRes = await fetch(`${GRAPH}/${p.id}?fields=instagram_business_account&access_token=${userToken}`);
@@ -51,6 +51,7 @@ module.exports = async function handler(req, res) {
       if (igData.instagram_business_account && igData.instagram_business_account.id) {
         igAccountId = igData.instagram_business_account.id;
         pageName = p.name;
+        pageId = p.id;
         break;
       }
     }
@@ -66,7 +67,7 @@ module.exports = async function handler(req, res) {
       username = uData.username || '';
     } catch (e) {}
 
-    await saveConnect({ token: userToken, igAccountId, pageName, username, expiresAt: Date.now() + expiresIn * 1000 });
+    await saveConnect({ token: userToken, igAccountId, pageId, pageName, username, expiresAt: Date.now() + expiresIn * 1000 });
 
     res.writeHead(302, { Location: SITE + '?ig_connected=1' });
     res.end();

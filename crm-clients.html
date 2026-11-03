@@ -5463,7 +5463,8 @@ function igConnectPanelHtml(){
         <button onclick="igFetchLiveStats(true)" style="background:none;border:1px solid var(--border);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">↻</button>
         <button onclick="igoDisconnect()" style="background:none;border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px 10px;font-size:11px;cursor:pointer">Déconnecter</button>
       </div>
-    </div>`;
+    </div>
+    <button onclick="igoEnableWebhook()" style="width:100%;background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;color:var(--dim);margin-bottom:8px">🔔 Activer les notifications de commentaires (1 fois, après avoir configuré le webhook — voir instructions)</button>`;
   if (igLiveLoading) return h + `<div style="font-size:12px;color:var(--dim)">Chargement…</div></div>`;
   if (igLiveError) return h + `<div style="font-size:12px;color:var(--red)">${igEsc(igLiveError)}</div></div>`;
   if (!igLiveStats) return h + `</div>`;
@@ -5482,6 +5483,53 @@ function igConnectPanelHtml(){
 
 let igMetricFilter = 'reach';
 let igExpandedPostId = null;
+let igAutoReplyRules = {};
+let igAutoReplyRulesLoaded = false;
+async function igFetchAutoReplyRules(){
+  if (igAutoReplyRulesLoaded) return;
+  try {
+    const r = await fetch('/api/ig-auto-reply');
+    const d = await r.json();
+    igAutoReplyRules = d.rules || {};
+    igAutoReplyRulesLoaded = true;
+    igRenderContent();
+  } catch(e) {}
+}
+function igAutoReplyRowHtml(mediaId){
+  const rule = igAutoReplyRules[mediaId];
+  return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">📩 DM automatique à chaque nouveau commentaire sur ce post</label>
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <input id="ig-auto-msg-${mediaId}" value="${igEsc(rule?rule.message:'')}" placeholder="Message à envoyer en privé…" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;background:var(--card2);color:inherit">
+      <button onclick="igoToggleAutoReply('${mediaId}')" style="background:${rule&&rule.enabled?'var(--red)':'#C13584'};color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap">${rule&&rule.enabled?'Désactiver':'Activer'}</button>
+    </div>
+    ${rule&&rule.enabled?`<div style="font-size:10px;color:var(--green);margin-top:4px">✓ Actif — nécessite que les notifications Instagram soient activées (voir en haut)</div>`:''}
+  </div>`;
+}
+async function igoToggleAutoReply(mediaId){
+  const rule = igAutoReplyRules[mediaId];
+  const input = document.getElementById('ig-auto-msg-'+mediaId);
+  const message = input ? input.value.trim() : '';
+  if (rule && rule.enabled) {
+    await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, enabled:false }) });
+  } else {
+    if (!message) { alert('Écris le message à envoyer avant d’activer.'); return; }
+    await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, message, enabled:true }) });
+  }
+  igAutoReplyRulesLoaded = false;
+  await igFetchAutoReplyRules();
+  igRenderContent();
+}
+async function igoEnableWebhook(){
+  try {
+    const r = await fetch('/api/ig-webhook-subscribe', { method:'POST' });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    alert('Notifications Instagram activées ✓');
+  } catch(e) {
+    alert('Erreur : ' + (e && e.message ? e.message : e) + '\n\nAs-tu bien configuré le webhook dans le dashboard Meta avant de cliquer ?');
+  }
+}
 const IG_METRICS = [
   {k:'newFollowers', l:'🧑‍🤝‍🧑 Nouveaux abonnés'},
   {k:'reach', l:'👁️ Vues'},
@@ -5522,8 +5570,9 @@ function igPostListHtml(media){
       </div>
       <div style="margin-top:8px;display:flex;gap:8px">
         <a href="${m.permalink}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:11px;color:var(--dim);text-decoration:underline">Voir sur Instagram</a>
-        <button onclick="event.stopPropagation();igoReplyToCommenters('${m.id}')" style="background:none;border:1px solid var(--border);border-radius:8px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--dim)">✉️ Répondre aux commentaires</button>
-      </div>`;
+        <button onclick="event.stopPropagation();igoReplyToCommenters('${m.id}')" style="background:none;border:1px solid var(--border);border-radius:8px;padding:3px 8px;font-size:10px;cursor:pointer;color:var(--dim)">✉️ Répondre aux commentaires (maintenant)</button>
+      </div>
+      ${igAutoReplyRowHtml(m.id)}`;
     }
     row += `</div>`;
     return row;
@@ -5625,6 +5674,7 @@ async function igRenderStats(){
   await igCheckStatus();
   igFetchLiveStats(false);
   igFetchHistory(false);
+  igFetchAutoReplyRules();
   let h = igConnectPanelHtml();
   h += igEvolutionHtml();
   const sorted=[...igStats].sort((a,b)=>b.date.localeCompare(a.date));
