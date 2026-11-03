@@ -31,10 +31,15 @@ module.exports = async function handler(req, res) {
     const userToken = longData.access_token;
     const expiresIn = longData.expires_in || 5184000;
 
+    const permsRes = await fetch(`${GRAPH}/me/permissions?access_token=${userToken}`);
+    const permsData = await permsRes.json();
+    const granted = (permsData.data || []).filter(p => p.status === 'granted').map(p => p.permission);
+    const declined = (permsData.data || []).filter(p => p.status === 'declined').map(p => p.permission);
+
     const pagesRes = await fetch(`${GRAPH}/me/accounts?access_token=${userToken}`);
     const pagesData = await pagesRes.json();
     const pages = pagesData.data || [];
-    console.log('ig-auth-callback diag', JSON.stringify({ pagesCount: pages.length, pagesError: pagesData.error || null }));
+    console.log('ig-auth-callback diag', JSON.stringify({ pagesCount: pages.length, pagesError: pagesData.error || null, granted, declined }));
     if (!pages.length) return fail('no_facebook_page_found');
 
     let igAccountId = null, pageName = null;
