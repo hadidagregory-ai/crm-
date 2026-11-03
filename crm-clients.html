@@ -5483,6 +5483,7 @@ function igConnectPanelHtml(){
 let igMetricFilter = 'reach';
 let igExpandedPostId = null;
 const IG_METRICS = [
+  {k:'newFollowers', l:'🧑‍🤝‍🧑 Nouveaux abonnés'},
   {k:'reach', l:'👁️ Vues'},
   {k:'likes', l:'❤️ Likes'},
   {k:'comments', l:'💬 Commentaires'},
@@ -5501,14 +5502,16 @@ function igPostListHtml(media){
   const sorted = [...media].sort((a,b)=>(b[igMetricFilter]||0)-(a[igMetricFilter]||0));
   return sorted.map(m=>{
     const expanded = igExpandedPostId===m.id;
+    const val = m[igMetricFilter];
     let row = `<div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;margin-bottom:6px;cursor:pointer" onclick="igToggleExpand('${m.id}')">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:10px">
         <div style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${igEsc((m.caption||'(sans légende)').slice(0,50))}</div>
-        <div style="font-size:16px;font-weight:800;color:#C13584;white-space:nowrap">${m[igMetricFilter]||0}</div>
+        <div style="font-size:16px;font-weight:800;color:#C13584;white-space:nowrap">${val==null?'—':val}</div>
       </div>
       <div style="font-size:10px;color:var(--dim);margin-top:2px">${new Date(m.timestamp).toLocaleDateString('fr-FR')}</div>`;
     if (expanded) {
       row += `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border);display:flex;gap:12px;flex-wrap:wrap;font-size:12px">
+        <span>🧑‍🤝‍🧑 ${m.newFollowers==null?'— (non mesuré pour les Reels)':m.newFollowers+' nouveaux abonnés'}</span>
         <span>👁️ ${m.reach||0} vues</span>
         <span>❤️ ${m.likes||0} likes</span>
         <span>💬 ${m.comments||0} commentaires</span>

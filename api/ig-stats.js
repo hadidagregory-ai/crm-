@@ -19,11 +19,11 @@ module.exports = async function handler(req, res) {
     const enriched = [];
     for (const m of (mediaData.data || [])) {
       let insights = {};
+      const isVideo = m.media_product_type === 'REELS' || m.media_type === 'VIDEO';
       try {
-        const isVideo = m.media_product_type === 'REELS' || m.media_type === 'VIDEO';
         const metrics = isVideo
           ? 'reach,likes,comments,shares,saved,total_interactions,ig_reels_avg_watch_time,ig_reels_video_view_total_time'
-          : 'reach,saved,likes,comments,shares,total_interactions';
+          : 'reach,saved,likes,comments,shares,total_interactions,follows';
         const insRes = await fetch(`${GRAPH}/${m.id}/insights?metric=${metrics}&access_token=${token}`);
         const insData = await insRes.json();
         if (Array.isArray(insData.data)) insData.data.forEach(row => { insights[row.name] = (row.values && row.values[0] && row.values[0].value) || 0; });
@@ -35,6 +35,7 @@ module.exports = async function handler(req, res) {
         reach: insights.reach || 0, saved: insights.saved || 0,
         interactions: insights.total_interactions || ((m.like_count || 0) + (m.comments_count || 0)),
         avgWatch: insights.ig_reels_avg_watch_time != null ? insights.ig_reels_avg_watch_time : null,
+        newFollowers: isVideo ? null : (insights.follows || 0),
       });
     }
 
