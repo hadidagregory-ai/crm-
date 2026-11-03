@@ -1,19 +1,19 @@
-const { GRAPH, ensureFreshToken, getScheduled, saveScheduled } = require('./_lib');
+const { GRAPH, ensureFreshToken, getScheduled, saveScheduled, resolveMediaUrl } = require('./_lib');
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
-async function createContainer(igAccountId, token, item) {
+async function createContainer(igAccountId, token, item, mediaUrl) {
   const params = new URLSearchParams();
   params.set('access_token', token);
   if (item.caption) params.set('caption', item.caption);
   if (item.target === 'story') {
     params.set('media_type', 'STORIES');
-    if (item.isVideo) params.set('video_url', item.mediaUrl); else params.set('image_url', item.mediaUrl);
+    if (item.isVideo) params.set('video_url', mediaUrl); else params.set('image_url', mediaUrl);
   } else if (item.target === 'reels' || item.isVideo) {
     params.set('media_type', 'REELS');
-    params.set('video_url', item.mediaUrl);
+    params.set('video_url', mediaUrl);
   } else {
-    params.set('image_url', item.mediaUrl);
+    params.set('image_url', mediaUrl);
   }
   const r = await fetch(`${GRAPH}/${igAccountId}/media`, { method: 'POST', body: params });
   return r.json();
@@ -56,7 +56,8 @@ module.exports = async function handler(req, res) {
   for (const item of due) {
     try {
       item.status = 'publishing';
-      const created = await createContainer(conn.igAccountId, conn.token, item);
+      const mediaUrl = await resolveMediaUrl(item.mediaUrl);
+      const created = await createContainer(conn.igAccountId, conn.token, item, mediaUrl);
       if (!created.id) { item.status = 'error'; item.error = JSON.stringify(created.error || created); continue; }
       if (item.isVideo || item.target === 'reels') {
         const ok = await waitUntilFinished(created.id, conn.token);

@@ -1,26 +1,37 @@
-const { put, head } = require('@vercel/blob');
+const { put, get, issueSignedToken, presignUrl } = require('@vercel/blob');
 
 const APP_ID = '1836590414159061';
 const GRAPH = 'https://graph.facebook.com/v23.0';
 
 async function readJson(pathname, fallback) {
   try {
-    const info = await head(pathname).catch(() => null);
-    if (!info) return fallback;
-    const r = await fetch(info.url);
-    if (!r.ok) return fallback;
-    return await r.json();
+    const result = await get(pathname, { access: 'private' });
+    if (!result || result.statusCode !== 200) return fallback;
+    const text = await new Response(result.stream).text();
+    return JSON.parse(text);
   } catch (e) {
     return fallback;
   }
 }
 async function writeJson(pathname, data) {
   await put(pathname, JSON.stringify(data), {
-    access: 'public',
+    access: 'private',
     contentType: 'application/json',
     addRandomSuffix: false,
     allowOverwrite: true,
   });
+}
+
+async function presignBlobGetUrl(pathname, ttlMs) {
+  ttlMs = ttlMs || 15 * 60 * 1000;
+  const signed = await issueSignedToken({ pathname, operations: ['get'], validUntil: Date.now() + ttlMs });
+  const { presignedUrl } = await presignUrl(signed, { operation: 'get', pathname, access: 'private', validUntil: Date.now() + ttlMs });
+  return presignedUrl;
+}
+
+async function resolveMediaUrl(mediaUrl) {
+  if (mediaUrl && mediaUrl.startsWith('blob:')) return presignBlobGetUrl(mediaUrl.slice(5));
+  return mediaUrl;
 }
 
 function getConnect() { return readJson('data/ig-connect.json', null); }
@@ -71,4 +82,5 @@ module.exports = {
   ensureFreshToken,
   exchangeForLongLivedToken, renewUserToken,
   readJson, writeJson,
+  presignBlobGetUrl, resolveMediaUrl,
 };

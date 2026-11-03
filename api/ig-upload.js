@@ -12,8 +12,8 @@ module.exports = async function handler(req, res) {
     const buffer = Buffer.from(dataBase64, 'base64');
     if (buffer.length > 4 * 1024 * 1024) { res.status(400).json({ error: 'file_too_large_use_url_instead' }); return; }
     const safeName = 'media/' + Date.now() + '-' + (filename || 'upload').replace(/[^a-zA-Z0-9._-]/g, '_');
-    const blob = await put(safeName, buffer, { access: 'public', contentType: contentType || 'application/octet-stream', addRandomSuffix: false });
-    res.status(200).json({ url: blob.url });
+    await put(safeName, buffer, { access: 'private', contentType: contentType || 'application/octet-stream', addRandomSuffix: false });
+    res.status(200).json({ url: 'blob:' + safeName });
   } catch (e) {
     res.status(500).json({ error: String(e && e.message || e) });
   }
