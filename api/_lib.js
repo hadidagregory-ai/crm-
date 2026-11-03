@@ -60,12 +60,15 @@ async function ensureFreshToken() {
   return conn;
 }
 
+function appConfig() { return { id: APP_ID, cred: appSecret() }; }
+const renewUserToken = exchangeForLongLivedToken;
+
 module.exports = {
-  APP_ID, GRAPH, appSecret,
+  APP_ID, GRAPH, appSecret, appConfig,
   getConnect, saveConnect,
   getScheduled, saveScheduled,
   getReplyLog, saveReplyLog,
   ensureFreshToken,
-  exchangeForLongLivedToken,
+  exchangeForLongLivedToken, renewUserToken,
   readJson, writeJson,
 };
