@@ -9,6 +9,14 @@ async function privateReply(commentId, token, message) {
   return r.json();
 }
 
+async function publicCommentReply(commentId, token, message) {
+  const params = new URLSearchParams();
+  params.set('message', message);
+  params.set('access_token', token);
+  const r = await fetch(`${GRAPH}/${commentId}/replies`, { method: 'POST', body: params });
+  return r.json();
+}
+
 module.exports = async function handler(req, res) {
   if (req.method === 'GET') {
     const mode = req.query['hub.mode'];
@@ -54,8 +62,16 @@ module.exports = async function handler(req, res) {
           if (!rule || !rule.enabled) continue;
           const already = new Set(replyLog[mediaId] || []);
           if (already.has(commentId)) continue;
-          const result = await privateReply(commentId, conn.token, rule.message);
-          if (!result.error) {
+          let ok = false;
+          if (rule.message) {
+            const result = await privateReply(commentId, conn.token, rule.message);
+            if (!result.error) ok = true;
+          }
+          if (rule.publicReply) {
+            const result = await publicCommentReply(commentId, conn.token, rule.publicReply);
+            if (!result.error) ok = true;
+          }
+          if (ok) {
             already.add(commentId);
             replyLog[mediaId] = Array.from(already);
             changed = true;

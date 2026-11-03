@@ -5498,23 +5498,25 @@ async function igFetchAutoReplyRules(){
 function igAutoReplyRowHtml(mediaId){
   const rule = igAutoReplyRules[mediaId];
   return `<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--border)" onclick="event.stopPropagation()">
-    <label style="font-size:11px;font-weight:700;color:var(--dim)">📩 DM automatique à chaque nouveau commentaire sur ce post</label>
-    <div style="display:flex;gap:6px;margin-top:4px">
-      <input id="ig-auto-msg-${mediaId}" value="${igEsc(rule?rule.message:'')}" placeholder="Message à envoyer en privé…" style="flex:1;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;background:var(--card2);color:inherit">
-      <button onclick="igoToggleAutoReply('${mediaId}')" style="background:${rule&&rule.enabled?'var(--red)':'#C13584'};color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer;white-space:nowrap">${rule&&rule.enabled?'Désactiver':'Activer'}</button>
-    </div>
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">📩 DM privé automatique à chaque nouveau commentaire</label>
+    <input id="ig-auto-msg-${mediaId}" value="${igEsc(rule?rule.message||'':'')}" placeholder="Message envoyé en privé…" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;background:var(--card2);color:inherit;margin:4px 0 8px">
+    <label style="font-size:11px;font-weight:700;color:var(--dim)">💬 Réponse publique automatique sous le commentaire</label>
+    <input id="ig-auto-pub-${mediaId}" value="${igEsc(rule?rule.publicReply||'':'')}" placeholder="Réponse visible par tous sous le commentaire…" style="width:100%;border:1px solid var(--border);border-radius:8px;padding:6px 8px;font-size:12px;background:var(--card2);color:inherit;margin:4px 0 8px">
+    <button onclick="igoToggleAutoReply('${mediaId}')" style="width:100%;background:${rule&&rule.enabled?'var(--red)':'#C13584'};color:#fff;border:none;border-radius:8px;padding:6px 10px;font-size:11px;cursor:pointer">${rule&&rule.enabled?'Désactiver':'Activer'}</button>
     ${rule&&rule.enabled?`<div style="font-size:10px;color:var(--green);margin-top:4px">✓ Actif — nécessite que les notifications Instagram soient activées (voir en haut)</div>`:''}
   </div>`;
 }
 async function igoToggleAutoReply(mediaId){
   const rule = igAutoReplyRules[mediaId];
-  const input = document.getElementById('ig-auto-msg-'+mediaId);
-  const message = input ? input.value.trim() : '';
+  const msgInput = document.getElementById('ig-auto-msg-'+mediaId);
+  const pubInput = document.getElementById('ig-auto-pub-'+mediaId);
+  const message = msgInput ? msgInput.value.trim() : '';
+  const publicReply = pubInput ? pubInput.value.trim() : '';
   if (rule && rule.enabled) {
     await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, enabled:false }) });
   } else {
-    if (!message) { alert('Écris le message à envoyer avant d’activer.'); return; }
-    await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, message, enabled:true }) });
+    if (!message && !publicReply) { alert('Écris au moins un message (privé ou public) avant d’activer.'); return; }
+    await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, message, publicReply, enabled:true }) });
   }
   igAutoReplyRulesLoaded = false;
   await igFetchAutoReplyRules();

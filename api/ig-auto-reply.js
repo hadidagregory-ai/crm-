@@ -31,14 +31,14 @@ module.exports = async function handler(req, res) {
       return;
     }
 
-    const { mediaId, message, enabled } = parsed || {};
+    const { mediaId, message, publicReply, enabled } = parsed || {};
     if (!mediaId) { res.status(400).json({ error: 'missing_mediaId' }); return; }
     const rules = await getAutoReplyRules();
     if (enabled === false) {
       delete rules[mediaId];
     } else {
-      if (!message) { res.status(400).json({ error: 'missing_message' }); return; }
-      rules[mediaId] = { message, enabled: true };
+      if (!message && !publicReply) { res.status(400).json({ error: 'missing_message' }); return; }
+      rules[mediaId] = { message: message || null, publicReply: publicReply || null, enabled: true };
     }
     await saveAutoReplyRules(rules);
     res.status(200).json({ ok: true, rules });
