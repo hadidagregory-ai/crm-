@@ -5386,8 +5386,7 @@ async function igCheckStatus(){
 }
 function igoConnect(){
   const redirectUri = encodeURIComponent('https://crm-woad-iota-63.vercel.app/api/ig-auth-callback');
-  const scope = encodeURIComponent('instagram_basic,instagram_manage_insights,instagram_content_publish,instagram_manage_comments,instagram_manage_messages,pages_show_list,pages_read_engagement,business_management');
-  window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=1836590414159061&redirect_uri=${redirectUri}&scope=${scope}&response_type=code`;
+  window.location.href = `https://www.facebook.com/v23.0/dialog/oauth?client_id=1836590414159061&redirect_uri=${redirectUri}&response_type=code&config_id=1077506628675030`;
 }
 async function igoConnectWithToken(){
   const input = document.getElementById('ig-manual-token');
