@@ -1076,21 +1076,52 @@ function crmSync() {
 
 /* ════════════════════════════════════════════════════════════════
    SYNC CLIENTS → TRAINING JUDO PRO
-   Pousse les clients du CRM vers le même stockage partagé (Apps Script)
-   que lit TrainingJudo PRO, en fusionnant par email pour ne pas
-   écraser les clients/programmes déjà présents côté app training.
+   Pousse les clients du CRM directement dans le fichier Google Drive
+   (même compte, même token drive.file déjà obtenu pour le CRM) que lit
+   TrainingJudo PRO, en fusionnant par email pour ne pas écraser les
+   clients/programmes déjà présents côté app training.
 ════════════════════════════════════════════════════════════════ */
-const TJ_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwmyt_zCVMltnkJgY8JHDUSVierfnYsFRzVVL0FabPZjZdmsg3TzhSrGb3O7Lah5VVQEg/exec';
+const TJ_DRIVE_FILENAME = 'tj-pro-data.json';
+let tjDriveFileId = null;
 let _tjSyncTimer = null;
 function syncClientsToTrainingApp() {
   clearTimeout(_tjSyncTimer);
   _tjSyncTimer = setTimeout(_pushClientsToTrainingApp, 1500);
 }
+async function tjDriveFindOrCreateFile() {
+  if (tjDriveFileId) {
+    const check = await driveFetch(`https://www.googleapis.com/drive/v3/files/${tjDriveFileId}?fields=id`);
+    if (check.ok) return tjDriveFileId;
+    tjDriveFileId = null;
+  }
+  const q = encodeURIComponent(`name='${TJ_DRIVE_FILENAME}' and trashed=false`);
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,name)`);
+  if (!res.ok) throw await driveApiError(res, 'Recherche Drive TJ');
+  const json = await res.json();
+  if (json.files && json.files.length) {
+    tjDriveFileId = json.files[0].id;
+  } else {
+    const createRes = await driveFetch('https://www.googleapis.com/drive/v3/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: TJ_DRIVE_FILENAME, mimeType: 'application/json' })
+    });
+    if (!createRes.ok) throw await driveApiError(createRes, 'Création fichier Drive TJ');
+    const createJson = await createRes.json();
+    tjDriveFileId = createJson.id;
+  }
+  return tjDriveFileId;
+}
 async function _pushClientsToTrainingApp() {
+  if (!driveAccessToken) return; // pas connecté : la synchro reprendra au prochain changement une fois reconnecté
   try {
-    const r = await fetch(TJ_APPS_SCRIPT_URL);
-    if (!r.ok) return;
-    const d = await r.json();
+    const fileId = await tjDriveFindOrCreateFile();
+    const getRes = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
+    let d = { exercises: [], seances: [], blocs: [], clients: [], assignments: [], performances: [] };
+    if (getRes.ok) {
+      const text = await getRes.text();
+      if (text) { try { d = JSON.parse(text); } catch (e) {} }
+    }
     const tjClients = Array.isArray(d.clients) ? d.clients.slice() : [];
     clients.forEach(c => {
       const nom = ((c.prenom||'') + ' ' + (c.nom||'')).trim();
@@ -1108,7 +1139,12 @@ async function _pushClientsToTrainingApp() {
       }
     });
     d.clients = tjClients;
-    fetch(TJ_APPS_SCRIPT_URL, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ data: d }) }).catch(() => {});
+    const upRes = await driveFetch(`https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(d)
+    });
+    if (!upRes.ok) throw await driveApiError(upRes, 'Sync TrainingJudo');
   } catch (e) { console.warn('Sync clients TrainingJudo error:', e); }
 }
 
