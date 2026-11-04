@@ -382,7 +382,6 @@ header{
   <div style="display:flex;gap:6px;align-items:center">
     <button class="btn btn-ghost btn-sm" onclick="crmCloudLoad()" title="Se connecter à Google Drive et charger les données" style="font-size:12px">⬇️ Cloud</button>
     <div id="crm-sync-dot" style="width:8px;height:8px;border-radius:50%;background:#B0B7C3;transition:background .3s;flex-shrink:0" title="Cloud non connecté"></div>
-    <div id="tj-sync-dot" onclick="tjShowSyncStatus()" style="width:8px;height:8px;border-radius:50%;background:#B0B7C3;transition:background .3s;flex-shrink:0;cursor:pointer" title="Sync TrainingJudo : touche pour voir le détail"></div>
     <button class="btn btn-ghost btn-sm" onclick="exportJSON()">↓ Export</button>
     <button class="btn btn-ghost btn-sm" onclick="importTrigger()">↑ Import</button>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
