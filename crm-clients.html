@@ -382,6 +382,7 @@ header{
   <div style="display:flex;gap:6px;align-items:center">
     <button class="btn btn-ghost btn-sm" onclick="crmCloudLoad()" title="Se connecter à Google Drive et charger les données" style="font-size:12px">⬇️ Cloud</button>
     <div id="crm-sync-dot" style="width:8px;height:8px;border-radius:50%;background:#B0B7C3;transition:background .3s;flex-shrink:0" title="Cloud non connecté"></div>
+    <div id="tj-sync-dot" onclick="tjShowSyncStatus()" style="width:8px;height:8px;border-radius:50%;background:#B0B7C3;transition:background .3s;flex-shrink:0;cursor:pointer" title="Sync TrainingJudo : touche pour voir le détail"></div>
     <button class="btn btn-ghost btn-sm" onclick="exportJSON()">↓ Export</button>
     <button class="btn btn-ghost btn-sm" onclick="importTrigger()">↑ Import</button>
     <input type="file" id="import-file" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -1084,6 +1085,17 @@ function crmSync() {
 const TJ_DRIVE_FILENAME = 'tj-pro-data.json';
 let tjDriveFileId = null;
 let _tjSyncTimer = null;
+let _tjSyncStatus = { state: 'idle', msg: 'Pas encore synchronisé depuis cette session.' };
+function tjSetSyncStatus(state, msg) {
+  _tjSyncStatus = { state, msg };
+  const el = document.getElementById('tj-sync-dot');
+  if (!el) return;
+  const colors = { idle: '#B0B7C3', pending: '#E8A020', ok: '#5BBD35', error: '#FF5757' };
+  el.style.background = colors[state] || colors.idle;
+}
+function tjShowSyncStatus() {
+  alert('Sync TrainingJudo PRO\n\n' + _tjSyncStatus.msg);
+}
 function syncClientsToTrainingApp() {
   clearTimeout(_tjSyncTimer);
   _tjSyncTimer = setTimeout(_pushClientsToTrainingApp, 1500);
@@ -1113,7 +1125,8 @@ async function tjDriveFindOrCreateFile() {
   return tjDriveFileId;
 }
 async function _pushClientsToTrainingApp() {
-  if (!driveAccessToken) return; // pas connecté : la synchro reprendra au prochain changement une fois reconnecté
+  if (!driveAccessToken) { tjSetSyncStatus('idle', 'Pas connecté à Google Drive — connecte-toi d\'abord (bouton ⬇️ Cloud).'); return; }
+  tjSetSyncStatus('pending', 'Synchronisation en cours…');
   try {
     const fileId = await tjDriveFindOrCreateFile();
     const getRes = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`);
@@ -1145,7 +1158,12 @@ async function _pushClientsToTrainingApp() {
       body: JSON.stringify(d)
     });
     if (!upRes.ok) throw await driveApiError(upRes, 'Sync TrainingJudo');
-  } catch (e) { console.warn('Sync clients TrainingJudo error:', e); }
+    const t = new Date();
+    tjSetSyncStatus('ok', clients.length + ' client(s) envoyé(s) vers TrainingJudo PRO à ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2,'0') + '.');
+  } catch (e) {
+    console.warn('Sync clients TrainingJudo error:', e);
+    tjSetSyncStatus('error', 'Échec : ' + (e && e.message ? e.message : String(e)));
+  }
 }
 
 // Charge les données depuis Drive dans l'appli (utilisé à la connexion et par le bouton ⬇️ Cloud)
