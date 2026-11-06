@@ -1145,9 +1145,10 @@ async function _pushClientsToTrainingApp() {
         if (c.email) match.email = c.email;
         if (c.sport) match.sport = c.sport;
         if (c.objectif) match.objectifs = c.objectif;
+        match.competitions = c.competitions || [];
         match.fromCrmId = c.id;
       } else {
-        tjClients.push({ id: 'crm_'+c.id, nom, email: c.email||'', sport: c.sport||'', niveau: '', poids: '', taille: '', objectifs: c.objectif||'', notes: '', fromCrmId: c.id });
+        tjClients.push({ id: 'crm_'+c.id, nom, email: c.email||'', sport: c.sport||'', niveau: '', poids: '', taille: '', objectifs: c.objectif||'', notes: '', competitions: c.competitions||[], fromCrmId: c.id });
       }
     });
     d.clients = tjClients;
