@@ -5566,11 +5566,19 @@ async function igoToggleAutoReply(mediaId){
   const pubInput = document.getElementById('ig-auto-pub-'+mediaId);
   const message = msgInput ? msgInput.value.trim() : '';
   const publicReply = pubInput ? pubInput.value.trim() : '';
-  if (rule && rule.enabled) {
-    await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, enabled:false }) });
-  } else {
-    if (!message && !publicReply) { alert('Écris au moins un message (privé ou public) avant d’activer.'); return; }
-    await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, message, publicReply, enabled:true }) });
+  try {
+    let r;
+    if (rule && rule.enabled) {
+      r = await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, enabled:false }) });
+    } else {
+      if (!message && !publicReply) { alert('Écris au moins un message (privé ou public) avant d’activer.'); return; }
+      r = await fetch('/api/ig-auto-reply', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ mediaId, message, publicReply, enabled:true }) });
+    }
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+  } catch(e) {
+    alert('Erreur en enregistrant la règle : ' + (e && e.message ? e.message : e));
+    return;
   }
   igAutoReplyRulesLoaded = false;
   await igFetchAutoReplyRules();
